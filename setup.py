@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os
+#import os
 
 try:
     from setuptools import setup
@@ -8,6 +8,8 @@ except ImportError as e:
     from distutils.core import setup
 
 requirements = [
+    'numpy',
+    'astropy',
 #    'numpy>=1.14',
 #    'python-casacore',
 #    'scipy',
