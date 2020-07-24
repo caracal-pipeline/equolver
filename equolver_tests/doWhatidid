@@ -1,0 +1,76 @@
+rm -r p1_00 p2_00
+fits in=mh_p23_HI_t10_r0_1370_1390.image.fits out=p1_00 op=xyin
+fits in=mh_p24_HI_t10_r0_1370_1390.image.fits out=p2_00 op=xyin
+
+puthd in=p1_00/restfreq value=1.4204057517667
+puthd in=p2_00/restfreq value=1.4204057517667
+
+rm -r p1_01 p2_01
+imsub in=p1_00 region="relpix,box(-255,-255,255,255)(30,33)" out=p1_01
+imsub in=p2_00 region="relpix,box(-255,-255,255,255)(30,33)" out=p2_01
+
+rm p1_01.fits p2_01.fits
+fits in=p1_01 out=p1_01.fits op=xyout
+fits in=p2_01 out=p2_01.fits op=xyout
+
+rm p1_02.fits p2_02.fits
+python
+from astropy.io import fits
+hduin = fits.open('mh_p23_HI_t10_r0_1370_1390.image.fits')
+hduout= fits.open('p1_01.fits')
+for plane in range(4):
+    for hdel in ['BMAJ', 'BMIN', 'BPA']:
+        hdelin = hdel+'{:d}'.format(plane+30)
+        hdelout = hdel+'{:d}'.format(plane+1)
+        hduout[0].header[hdelout] = hduin[0].header[hdelin]
+
+hduout.writeto('p1_02.fits', overwrite=True)
+hduin = fits.open('mh_p24_HI_t10_r0_1370_1390.image.fits')
+hduout= fits.open('p2_01.fits')
+for plane in range(4):
+    for hdel in ['BMAJ', 'BMIN', 'BPA']:
+        hdelin = hdel+'{:d}'.format(plane+30)
+        hdelout = hdel+'{:d}'.format(plane+1)
+        hduout[0].header[hdelout] = hduin[0].header[hdelin]
+
+hduout.writeto('p2_02.fits', overwrite=True)
+exit()
+
+rm -r p1_03 p2_03
+cp -r p1_01 p1_03
+cp -r p2_01 p2_03
+velsw in=p1_03 axis=vrad
+velsw in=p2_03 axis=vrad
+  
+rm p1_03.fits p2_03.fits
+fits in=p1_03 out=p1_03.fits op=xyout
+fits in=p2_03 out=p2_03.fits op=xyout
+
+rm p1_04.fits p2_04.fits
+python
+from astropy.io import fits
+hduin = fits.open('mh_p23_HI_t10_r0_1370_1390.image.fits')
+hduout= fits.open('p1_03.fits')
+for plane in range(4):
+    for hdel in ['BMAJ', 'BMIN', 'BPA']:
+        hdelin = hdel+'{:d}'.format(plane+30)
+        hdelout = hdel+'{:d}'.format(plane+1)
+        hduout[0].header[hdelout] = hduin[0].header[hdelin]
+
+hduout[0].header['CDELT3'] = hduout[0].header['CDELT3']*1000.
+hduout[0].header['CRVAL3'] = hduout[0].header['CRVAL3']*1000.
+hduout[0].header['CUNIT3'] = 'M/S'
+hduout.writeto('p1_04.fits', overwrite=True)
+hduin = fits.open('mh_p24_HI_t10_r0_1370_1390.image.fits')
+hduout= fits.open('p2_03.fits')
+for plane in range(4):
+    for hdel in ['BMAJ', 'BMIN', 'BPA']:
+        hdelin = hdel+'{:d}'.format(plane+30)
+        hdelout = hdel+'{:d}'.format(plane+1)
+        hduout[0].header[hdelout] = hduin[0].header[hdelin]
+
+hduout[0].header['CDELT3'] = hduout[0].header['CDELT3']*1000.
+hduout[0].header['CRVAL3'] = hduout[0].header['CRVAL3']*1000.
+hduout[0].header['CUNIT3'] = 'm/s'
+hduout.writeto('p2_04.fits', overwrite=True)
+exit()
