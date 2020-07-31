@@ -74,3 +74,66 @@ hduout[0].header['CRVAL3'] = hduout[0].header['CRVAL3']*1000.
 hduout[0].header['CUNIT3'] = 'm/s'
 hduout.writeto('p2_04.fits', overwrite=True)
 exit()
+
+rm p1_05.fits p2_05.fits
+python
+from astropy.io import fits
+hduin = fits.open('mh_p23_HI_t10_r0_1370_1390.image.fits')
+hduout= fits.open('p1_03.fits')
+for plane in range(4):
+    for hdel in ['BMAJ', 'BMIN', 'BPA']:
+        hdelin = hdel+'{:d}'.format(plane+30)
+        hdelout = hdel+'{:d}'.format(plane+1)
+        hduout[0].header[hdelout] = hduin[0].header[hdelin]
+
+hduout[0].header['CDELT3'] = hduout[0].header['CDELT3']*1000.
+hduout[0].header['CRVAL3'] = hduout[0].header['CRVAL3']*1000.
+hduout[0].header['CUNIT3'] = 'M/S'
+hduout[0].header['CELLSCAL'] = '1/F'
+hduout.writeto('p1_05.fits', overwrite=True)
+hduin = fits.open('mh_p24_HI_t10_r0_1370_1390.image.fits')
+hduout= fits.open('p2_03.fits')
+for plane in range(4):
+    for hdel in ['BMAJ', 'BMIN', 'BPA']:
+        hdelin = hdel+'{:d}'.format(plane+30)
+        hdelout = hdel+'{:d}'.format(plane+1)
+        hduout[0].header[hdelout] = hduin[0].header[hdelin]
+
+hduout[0].header['CDELT3'] = hduout[0].header['CDELT3']*1000.
+hduout[0].header['CRVAL3'] = hduout[0].header['CRVAL3']*1000.
+hduout[0].header['CUNIT3'] = 'm/s'
+hduout[0].header['CELLSCAL'] = '1/F'
+hduout[0].header['BMAJ3'].pop()
+hduout.writeto('p2_05.fits', overwrite=True)
+exit()
+
+# Generate data sets without frequency info
+rm -r p1_06 p2_06
+imsub in=p1_00 region="relpix,box(-255,-255,255,255)(30)" out=p1_06
+imsub in=p2_00 region="relpix,box(-255,-255,255,255)(30)" out=p2_06
+rm p1_06.fits p2_06.fits
+fits in=p1_06 out=p1_06.fits op=xyout
+fits in=p2_06 out=p2_06.fits op=xyout
+rm p1_07.fits p2_07.fits
+python
+from astropy.io import fits
+for ffile in ['p1', 'p2']:
+    hduout= fits.open(ffile+'_06.fits')
+    hduout[0].header['NAXIS'] = 2
+    hduout[0].header.pop('NAXIS3')
+    hduout[0].header.pop('CDELT3')
+    hduout[0].header.pop('CRVAL3')
+    hduout[0].header.pop('CRPIX3')
+    hduout[0].header.pop('CTYPE3')
+    hduout[0].header.pop('NAXIS4')
+    hduout[0].header.pop('CDELT4')
+    hduout[0].header.pop('CRVAL4')
+    hduout[0].header.pop('CRPIX4')
+    hduout[0].header.pop('CTYPE4')
+    hduout[0].header.pop('CELLSCAL')
+    print(hduout[0].data.shape)
+    hduout[0].data = hduout[0].data[0,0,:,:]
+    hduout[0].data[10,20] = 0.04
+    hduout.writeto(ffile+'_07.fits', overwrite=True)
+
+exit()
