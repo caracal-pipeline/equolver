@@ -490,7 +490,7 @@ class Beach:
 
         for i in range(len(self._cubes)):
             
-            cinquant = unitsconv(cinquant)
+            cinquant = self._unitsconv(cinquant)
             
             # One number for all
             if type(cinquant) == type(.1) or type(cinquant) == type(np.nan):
@@ -879,7 +879,7 @@ class Beach:
             boutfarray[:,1] = binfarray[:,1]/binfarray[:,4]/np.sqrt(np.log(256))
 
             # Scale to cos pa and sin pa
-            boutfarray[:,2] = np.pi*binfarray[:,2]/180.)
+            boutfarray[:,2] = np.pi*binfarray[:,2]/180.
             boutfarray[:,3] = np.sin(boutfarray[:,2])
             boutfarray[:,4] = np.cos(boutfarray[:,2])
 
@@ -1480,7 +1480,7 @@ class Beach:
 
         # First check which type of input this is
 
-        if type(item) = type([]):
+        if type(item) == type([]):
             if len(item) == 4:
                 
                 # The alternative is either numeric or quantity,
@@ -1634,7 +1634,7 @@ class Beach:
             targar[i][:,2] = tar_bpa_inter[i]+tar_bpa_slope[i]*tar_bpa_absc[i]
 
             # Converting to rad
-            targar[i][:,2] = np.pi*targar[:,2]/180.)
+            targar[i][:,2] = np.pi*targar[:,2]/180.
 
             # Calculating sin
             targar[i][:,3] = np.sin(targar[:,2])

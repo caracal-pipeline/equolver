@@ -2107,7 +2107,6 @@ class Beach:
                     return output
                 
         # Now we know this can only be numeric and a direct input
-        print(item)
         output = self._getdefault(item)
         return output
                 
