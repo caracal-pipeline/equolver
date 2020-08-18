@@ -41,7 +41,7 @@ class Beach:
                        tar_bpa_slope =  ['bpa', 'madstdev', 'total'],
                        tar_bpa_absc =  0.0,
                        tar_scaling = 'freq', genbstats_exe = True, gentarget_exe = True,
-                       gentrans_exe = True, transnames = None, overwrite = True,
+                       gentrans_exe = True, transnames = None, overwrite = True, threads = 1,
                        verb = False):
         """
         Private instance variables:
@@ -78,6 +78,7 @@ class Beach:
         """
         self._initvars()
         self._verb = verb
+        self._threads = threads
         self.initheaders(cubenames = cubenames)
         self._initbinfo_inputvar(bmaj = bmaj, bmaj_replace =
                                  bmaj_replace, bmin = bmin,
@@ -178,7 +179,8 @@ class Beach:
 
         self._transnames = None
         self._overwrite = None
-        
+
+        self._threads = None
         return
 
     @property
@@ -2294,7 +2296,7 @@ class Beach:
         return
 
     def _initgentransvar(self, transnames = None, overwrite = None,
-                         verb = None):
+                         threads = None, verb = None):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -2312,7 +2314,7 @@ class Beach:
         return output
             
     def gentrans(self, transnames = None, overwrite = None,
-                  verb = None):
+                       threads = None, verb = None):
         """
         (De-)convolve input data cubes or images to target beam shapes
 
@@ -2328,7 +2330,7 @@ class Beach:
         """
         stop = self._initgentransvar(transnames = transnames,
                                      overwrite = overwrite, verb =
-                                     verb)
+                                     verb, threads = threads)
         if stop:
             if verb or self._verb:
                 warnings.warn('Parameters missing. Not generating output data'+ \
@@ -2363,23 +2365,34 @@ class Beach:
             return
 
         # After this marginal verification, we continue
+
+        # Open, reconvolve, copy
         for i in range(len(cuben)):
             incubus = fits.open(cuben[i])
-            orishape = incubus[0].image.shape
-            incubus[0].image = \
-                incubus[0].image.reshape((incubus[0].header['NAXIS1'],
-                                          incubus[0].header['NAXIS2'],
-                                          len(self._binfo_input[i][:,0])))
-
+            incubus_image = incubus[0].image.astype('float'+'{:d}'.format(incubus[0].data.itemsize*8))
+            orishape = incubus_image.shape
+            #incubus_image = incubus_image.reshape((incubus[0].header['NAXIS1'],
+            #                             incubus[0].header['NAXIS2'],
+            #                             len(self._binfo_input[i][:,0])))
+            incubus_image = np.squeeze(incubus_image)
+            
             # Make a copy
-            outcubus = incubus[0].image.copy()*0.+np.nan
+            outcubus_image = incubus_image.copy()*0.+np.nan
             
             for plane in incubus[0].image.shape[2]:
                 originbeam = self._binfo_pixel[i][plane,:]
                 targetbeam = self._binfo_target[i][plane,:]
-                originplane = incubus[:,:,plane]
-                targetplane = outcubus[:,:,plane]
-                self._reconvolve(originplane, targetplane, originbeam, targetbeam)
+                originplane = incubus_image[:,:,plane]
+                targetplane = outcubus_image[:,:,plane]
+                self._reconvolve(originplane, targetplane, originbeam,
+                                 targetbeam, threads = self._threads)
+
+            # Replace incubus with outcubus and write out
+            incubus[0].image[:] = outcubus_image.astype(incubus[0].image.dtype)
+
+            # Here we are missing the bit to update the header info
+            
+        
         return
 
     def _gaussian_2dp(self, naxis1 = 100, naxis2 = 100, cdelt1 = 1.,
@@ -2464,10 +2477,6 @@ class Beach:
         be (the Fourier transform of) a convolution kernel.
 
         """
-        print('dmaa_gauss', signum_maj_a, dispersion_maj_a)
-        print('dmia_gauss', signum_min_a, dispersion_min_a)
-        print('dmab_gauss', signum_maj_b, dispersion_maj_b)
-        print('dmib_gauss', signum_min_b, dispersion_min_b)
 
         # Create map 
         indices = np.indices((naxis2,naxis1), dtype = dtype)
@@ -2503,16 +2512,8 @@ class Beach:
 
         np.seterr(divide = None)
 
-        #print('exponent1a', exponent1a)
-        #print('exponent0a', exponent0a)
-        #print('exponent1b', exponent1b)
-        #print('exponent0b', exponent0b)      
-        
         amplitude = amplitude_maj_a*amplitude_min_a*amplitude_maj_b*amplitude_min_b
         exponent=exponent1a+exponent0a+exponent1b+exponent0b
-        #hdu = fits.PrimaryHDU(exponent)
-        #hdul = fits.HDUList([hdu])
-        #hdul.writeto('checkamp.fits', overwrite = True)
         
         return amplitude*np.exp(0.5*(exponent1a+exponent0a+exponent1b+exponent0b))
 
@@ -2551,10 +2552,6 @@ class Beach:
         if dispersion_min_b != 0.:
             amplitude_min_b = amplitude_min_b*dispersion_min_b*np.sqrt(2.*np.pi)
 
-        #print('amaa', amplitude_maj_a)
-        #print('amab', amplitude_maj_b)
-        #print('amia', amplitude_min_a)
-        #print('amib', amplitude_min_b)
         amplitude_maj_a = np.power(amplitude_maj_a,-signum_maj_a)
         amplitude_min_a = np.power(amplitude_min_a,-signum_min_a)
 
@@ -2577,11 +2574,6 @@ class Beach:
         dispersion_maj_b = np.divide(1.,2.*np.pi*dispersion_maj_b)
         dispersion_min_b = np.divide(1.,2.*np.pi*dispersion_min_b)
         np.seterr(divide = None)
-
-        print('dmaa', signum_maj_a, dispersion_maj_a)
-        print('dmia', signum_min_a, dispersion_min_a)
-        print('dmab', signum_maj_b, dispersion_maj_b)
-        print('dmib', signum_min_b, dispersion_min_b)
 
         if forreal:
             naxis1 = naxis1//2+1
@@ -2635,7 +2627,7 @@ class Beach:
         print()
         print('#########################################')
         print()
-        print('Make a map with this Gaussian at centre')
+        print('Make a map with Gaussian at centre')
         print()
         hdu[0].data[:] = self._gaussian_2dp(naxis1 = target.shape[1],
                                             naxis2 = target.shape[0],
@@ -2668,9 +2660,6 @@ class Beach:
         
         print()
         print('#########################################')
-        
-        print()
-        print('#########################################')
         print()
         print('Generate Gaussian at origin')
         print()
@@ -2700,58 +2689,6 @@ class Beach:
         hdu.writeto(outgaussian_origin, overwrite = True)
         print('Image to be found at', outgaussian_origin)
         print('')
-        print('#########################################')
-
-        print()
-        print('#########################################')
-        print()
-        print('Do an FFT convolution')
-
-        kernel = self._gaussian_2dp(naxis1 = target.shape[1], naxis2 =
-                                    target.shape[0], cdelt1 = 1.,
-                                    cdelt2 = 1., amplitude_maj_a = 1.,
-                                    dispersion_maj_a = dis_maj,
-                                    signum_maj_a = -1.,
-                                    amplitude_min_a = 1.,
-                                    dispersion_min_a = dis_min,
-                                    signum_min_a = -1., pa_a = pa,
-                                    dtype =
-                                    target.dtype, centering =
-                                    'origin', forreal = False)
-        
-        fft = pyfftw.builders.fft2(kernel, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        ikernel = fft()
-
-        hdu[0].data[:] = target
-        hdu.writeto(targetname, overwrite = True)
-        tarcopy = target[:]
-        
-        itarget = ikernel.copy()
-        fft.update_arrays(target.astype(fft.input_dtype), itarget)
-        fft()
-        #itarget = pyfftw.interfaces.numpy_fft.fft2(tarcopy)
-        iconvolved = ikernel*itarget
-
-        #ifft = pyfftw.builders.ifft2(iconvolved)
-        #result = ifft()
-        ifft = pyfftw.builders.ifft2(iconvolved, s=target.shape, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        #convolved = pyfftw.interfaces.numpy_fft.ifft2(iconvolved)
-        convolved = ifft()
-        
-        hdu[0].data[:] = convolved.astype(hdu[0].data.dtype)
-        
-        print('result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
-        print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
-        print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
-        hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2] += 2
-        hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)] += 2.
-        hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)] += 2.
-        hdu.writeto(outgaussian_fftconv, overwrite = True)
-        print('Image to be found at', outgaussian_fftconv)
-        print('')
-        print('#########################################')
-
-
         print('#########################################')
         print()
         print('Do a real FFT convolution')
@@ -2795,149 +2732,7 @@ class Beach:
         hdu.writeto(outgaussian_rfftconv, overwrite = True)
         print('Image to be found at', outgaussian_rfftconv)
         print('')
-        print('#########################################')
-
-        print()
-        print('#########################################')
-        print()
-        print('Do an FFT convolution with a Gaussian calculated in the Fourier domain')
-
-        ikernel = self._igaussian_2dp(naxis1 = target.shape[1], naxis2
-                                      = target.shape[0], cdelt1 = 1.,
-                                      cdelt2 = 1., amplitude_maj_a = 1.,
-                                      dispersion_maj_a = dis_maj,
-                                      signum_maj_a = -1.,
-                                      amplitude_min_a = 1.,
-                                      dispersion_min_a = dis_min,
-                                      signum_min_a = -1., pa_a = pa,
-                                      amplitude_maj_b = 1.,
-                                      dispersion_maj_b = 0.,
-                                      amplitude_min_b =
-                                      1.,dispersion_min_b = 0.,
-                                      signum_maj_b = -1., signum_min_b =
-                                      -1., pa_b = 0., dtype =
-                                      target.dtype, centering =
-                                      'origin', forreal = False)
-
-        fft = pyfftw.builders.fft2(target.copy(), planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        itarget = fft()
-
-        #itarget = pyfftw.interfaces.numpy_fft.fft2(tarcopy)
-        iconvolved = ikernel*itarget
-
-        #ifft = pyfftw.builders.ifft2(iconvolved)
-        #result = ifft()
-        ifft = pyfftw.builders.ifft2(iconvolved, s=target.shape, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        #convolved = pyfftw.interfaces.numpy_fft.ifft2(iconvolved)
-        convolved = ifft()
-        
-        hdu[0].data[:] = convolved.astype(hdu[0].data.dtype)
-        
-        print('result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
-        print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
-        print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
-        hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2] += 2
-        hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)] += 2.
-        hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)] += 2.
-        hdu.writeto(outgaussian_convcalc, overwrite = True)
-        print('Image to be found at', outgaussian_convcalc)
-        print('')
-        print('#########################################')
-        
-        print()
-        print('#########################################')
-        print()
-        print('Do an FFT convolution with a Gaussian calculated in the Fourier domain, only one direction, highlighting traps')
-
-        ikernel = self._igaussian_2dp(naxis1 = target.shape[1], naxis2
-                                      = target.shape[0], cdelt1 = 1.,
-                                      cdelt2 = 1., amplitude_maj_a = 1.,
-                                      dispersion_maj_a = 0.,
-                                      signum_maj_a = -1.,
-                                      amplitude_min_a = 1.,
-                                      dispersion_min_a = dis_min,
-                                      signum_min_a = -1., pa_a = 0.,
-                                      amplitude_maj_b = 1.,
-                                      dispersion_maj_b = 0.,
-                                      amplitude_min_b =
-                                      1.,dispersion_min_b = 0.,
-                                      signum_maj_b = -1., signum_min_b =
-                                      -1., pa_b = 0., dtype =
-                                      target.dtype, centering =
-                                      'origin', forreal = False)
-
-        fft = pyfftw.builders.fft2(target.copy(), planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        itarget = fft()
-
-        #itarget = pyfftw.interfaces.numpy_fft.fft2(tarcopy)
-        iconvolved = ikernel*itarget
-
-        #ifft = pyfftw.builders.ifft2(iconvolved)
-        #result = ifft()
-        ifft = pyfftw.builders.ifft2(iconvolved, s=target.shape, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        #convolved = pyfftw.interfaces.numpy_fft.ifft2(iconvolved)
-        convolved = ifft()
-        
-        hdu[0].data[:] = convolved.astype(hdu[0].data.dtype)
-        
-        print('result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
-        print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
-        print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
-        hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2] += 2
-        hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)] += 2.
-        hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)] += 2.
-        hdu.writeto('lin_p0_'+outgaussian_convcalc, overwrite = True)
-        print('Image to be found at', 'lin_p0_'+outgaussian_convcalc)
-        print('')
-        print('#########################################')
-        
-        print()
-        print('#########################################')
-        print()
-        print('Do an FFT convolution with a Gaussian calculated in the Fourier domain, only one direction, highlighting traps II')
-
-        ikernel = self._igaussian_2dp(naxis1 = target.shape[1], naxis2
-                                      = target.shape[0], cdelt1 = 1.,
-                                      cdelt2 = 1., amplitude_maj_a = 1.,
-                                      dispersion_maj_a = 0.,
-                                      signum_maj_a = -1.,
-                                      amplitude_min_a = 1.,
-                                      dispersion_min_a = dis_min,
-                                      signum_min_a = -1., pa_a = 30.,
-                                      amplitude_maj_b = 1.,
-                                      dispersion_maj_b = 0.,
-                                      amplitude_min_b =
-                                      1.,dispersion_min_b = 0.,
-                                      signum_maj_b = -1., signum_min_b =
-                                      -1., pa_b = 0., dtype =
-                                      target.dtype, centering =
-                                      'origin', forreal = False)
-
-        fft = pyfftw.builders.fft2(target.copy(), planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        itarget = fft()
-
-        #itarget = pyfftw.interfaces.numpy_fft.fft2(tarcopy)
-        iconvolved = ikernel*itarget
-
-        #ifft = pyfftw.builders.ifft2(iconvolved)
-        #result = ifft()
-        ifft = pyfftw.builders.ifft2(iconvolved, s=target.shape, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        #convolved = pyfftw.interfaces.numpy_fft.ifft2(iconvolved)
-        convolved = ifft()
-        
-        hdu[0].data[:] = convolved.astype(hdu[0].data.dtype)
-        
-        print('result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
-        print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
-        print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
-        hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2] += 2
-        hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)] += 2.
-        hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)] += 2.
-        hdu.writeto('lin_p30_'+outgaussian_convcalc, overwrite = True)
-        print('Image to be found at', 'lin_p30_'+outgaussian_convcalc)
-        print('')
-        print('#########################################')
-        
+        print('#########################################')        
         print()
         print('#########################################')
         print()
@@ -2996,8 +2791,8 @@ class Beach:
         # Generate Gaussian
         a_maj_a = 1.
         a_min_a = 1.
-        HPBW_maj_a = 7.
-        HPBW_min_a = 7.
+        HPBW_maj_a = 8.
+        HPBW_min_a = 8.
         dis_maj_a = HPBW_maj_a/np.sqrt(np.log(256.))
         dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
         pa_a = np.pi*30./180.
@@ -3024,128 +2819,93 @@ class Beach:
         # This is now the Gaussian that we want
         a_maj_b = 1.
         a_min_b = 1.
-        HPBW_maj_b = 10.
-        HPBW_min_b = 6.
+        HPBW_maj_b = 9.
+        HPBW_min_b = 8.
         dis_maj_b = HPBW_maj_b/np.sqrt(np.log(256.))
         dis_min_b = HPBW_min_b/np.sqrt(np.log(256.))
-        pa_b = np.pi*75./180.
+        pa_b = np.pi*0./180.
         xmin = np.cos(pa_b)*HPBW_min_b/2
         ymin = np.sin(pa_b)*HPBW_min_b/2
         xmaj = -np.sin(pa_b)*HPBW_maj_b/2
         ymaj = np.cos(pa_b)*HPBW_maj_b/2
-        
-        print(dis_min_a, dis_maj_a, dis_min_b, dis_maj_b)
-        minikern = np.amin([dis_min_a, dis_maj_a, dis_min_b, dis_maj_b])
-        disn_min_a = np.power(dis_min_a,2.)-np.power(minikern,2.)
-        disn_maj_a = np.power(dis_maj_a,2.)-np.power(minikern,2.)
-        disn_min_b = np.power(minikern,2.)-np.power(dis_min_b,2.)
-        disn_maj_b = np.power(minikern,2.)-np.power(dis_maj_b,2.)
 
-        sign_min_a = 1.
-        sign_maj_a = 1.
-        sign_min_b = -1.
-        sign_maj_b = -1.
+        # The following is an old strategy, (de-)convolving the
+        # original image with the minimally required beam. Has been
+        # moderately successful as de-convolution still allows for a
+        # few pixels only for very small kernels. The problem with
+        # this strategy so far is the unknown normalization.
         
-        if disn_min_a != 0.:
-            sign_min_a = np.sign(disn_min_a)
-        if disn_maj_a != 0.:
-            sign_maj_a = np.sign(disn_maj_a)
-        if disn_min_b != 0.:
-            sign_min_b = np.sign(disn_min_b)
-        if disn_maj_b != 0.:
-            sign_maj_b = np.sign(disn_maj_b)
+        #minikern = np.amin([dis_min_a, dis_maj_a, dis_min_b, dis_maj_b])
+        #disn_min_a = np.power(dis_min_a,2.)-np.power(minikern,2.)
+        #disn_maj_a = np.power(dis_maj_a,2.)-np.power(minikern,2.)
+        #disn_min_b = np.power(minikern,2.)-np.power(dis_min_b,2.)
+        #disn_maj_b = np.power(minikern,2.)-np.power(dis_maj_b,2.)
+        #
+        #sign_min_a = 1.
+        #sign_maj_a = 1.
+        #sign_min_b = -1.
+        #sign_maj_b = -1.
+        #
+        #if disn_min_a != 0.:
+        #    sign_min_a = np.sign(disn_min_a)
+        #if disn_maj_a != 0.:
+        #    sign_maj_a = np.sign(disn_maj_a)
+        #if disn_min_b != 0.:
+        #    sign_min_b = np.sign(disn_min_b)
+        #if disn_maj_b != 0.:
+        #    sign_maj_b = np.sign(disn_maj_b)
 
-        #print('smaa', sign_maj_a)
-        #print('smia', sign_min_a)
-        #print('smab', sign_maj_b)
-        #print('smib', sign_min_b)
+        #disn_min_a = np.sqrt(np.abs(disn_min_a))
+        #disn_maj_a = np.sqrt(np.abs(disn_maj_a))
+        #disn_min_b = np.sqrt(np.abs(disn_min_b))
+        #disn_maj_b = np.sqrt(np.abs(disn_maj_b))
+        
+        #bcorrmaj = np.power(np.sqrt(2*np.pi*disn_maj_b*disn_maj_b*disn_maj_a*disn_maj_a/(disn_maj_b*disn_maj_b+disn_maj_a*disn_maj_a)), sign_maj_b)
+        #bcorrmin = np.power(np.sqrt(2*np.pi*disn_min_b*disn_min_b*disn_min_a*disn_min_a/(disn_min_b*disn_min_b+disn_min_a*disn_maj_a)), sign_min_b)
+        #bcorrmin = np.power(np.sqrt(2*np.pi*disn_min_a*disn_min_a*minikern*minikern/(disn_min_b*disn_min_b+minikern*minikern)), sign_min_b)
+        #acorrmaj = np.power(np.sqrt(2*np.pi*disn_maj_a*disn_maj_a*minikern*minikern/(disn_maj_a*disn_maj_a+minikern*minikern)), -1)
+        #acorrmin = np.power(np.sqrt(2*np.pi*disn_min_a*disn_min_a*minikern*minikern/(disn_min_a*disn_min_a+minikern*minikern)), sign_min_a)
 
-        disn_min_a = np.sqrt(np.abs(disn_min_a))
-        disn_maj_a = np.sqrt(np.abs(disn_maj_a))
-        disn_min_b = np.sqrt(np.abs(disn_min_b))
-        disn_maj_b = np.sqrt(np.abs(disn_maj_b))
-        
-        print('dmaa_2', sign_maj_a, disn_maj_a)
-        print('dmia_2', sign_min_a, disn_min_a)
-        print('dmab_2', sign_maj_b, disn_maj_b)
-        print('dmib_2', sign_min_b, disn_min_b)
-        print()
-
-        bcorrmaj = np.power(np.sqrt(2*np.pi*disn_maj_b*disn_maj_b*disn_maj_a*disn_maj_a/(disn_maj_b*disn_maj_b+disn_maj_a*disn_maj_a)), sign_maj_b)
-        bcorrmin = np.power(np.sqrt(2*np.pi*disn_min_b*disn_min_b*disn_min_a*disn_min_a/(disn_min_b*disn_min_b+disn_min_a*disn_maj_a)), sign_min_b)
-#        bcorrmin = np.power(np.sqrt(2*np.pi*disn_min_b*disn_min_b*minikern*minikern/(disn_min_b*disn_min_b+minikern*minikern)), sign_min_b)
-        acorrmaj = np.power(np.sqrt(2*np.pi*disn_maj_a*disn_maj_a*minikern*minikern/(disn_maj_a*disn_maj_a+minikern*minikern)), -1)
-        acorrmin = np.power(np.sqrt(2*np.pi*disn_min_a*disn_min_a*minikern*minikern/(disn_min_a*disn_min_a+minikern*minikern)), sign_min_a)
-
-        diffdissq_maj = np.power(dis_maj_b,2)-np.power(dis_maj_a,2)
-        diffdissq_min = np.power(dis_min_b,2)-np.power(dis_min_a,2)
-        norm_maj = np.sqrt(2*np.pi*diffdissq_maj*np.power(dis_maj_a,2))/(diffdissq_maj+np.power(dis_maj_a,2))
-        norm_min = np.sqrt(2*np.pi*diffdissq_min*np.power(dis_min_a,2))/(diffdissq_min+np.power(dis_min_a,2))
-        
-        bcorrmaj = 1.
-        bcorrmin = 1.
-        acorrmaj = 1.
-        acorrmin = 1.
-        
-        print('bcorrmaj', bcorrmaj)
-        print('bcorrmin', bcorrmin)
-        print('acorrmaj', acorrmaj)
-        print('acorrmin', acorrmin)
-        
         #ikernel = self._igaussian_2dp(naxis1 = target.shape[1], naxis2
-        #                              = target.shape[0], cdelt1 = 1.,
-        #                              cdelt2 = 1.,
-        #                              amplitude_maj_a = acorrmaj,
-        #                              dispersion_maj_a = disn_maj_a,
-        #                              signum_maj_a = sign_maj_a,
-        #                              amplitude_min_a = 1.,
-        #                              dispersion_min_a = disn_min_a,
-        #                              signum_min_a = sign_min_a,
-        #                              pa_a = pa_a,
-        #                              amplitude_maj_b = bcorrmaj,
-        #                              dispersion_maj_b = disn_maj_b,
-        #                              amplitude_min_b =
-        #                              bcorrmin, dispersion_min_b = disn_min_b,
-        #                              signum_maj_b = sign_maj_b, signum_min_b =
-        #                              sign_min_b, pa_b = pa_b, dtype =
-        #                              target.dtype, centering =
-        #                              'origin', forreal = True)
-        
-        #diffdiss_maj = np.power(dis_maj_b,2)-np.power(dis_maj_a,2)
-        #diffdiss_min = np.power(dis_min_b,2)-np.power(dis_min_a,2)
-        #norm_maj = np.sqrt(2*np.pi*diffdiss_maj*np.power(dis_maj_a,2.)/(diffdiss_maj+np.power(dis_maj_a,2)))
-        #norm_min = np.sqrt(2*np.pi*diffdiss_min*dis_min_a/(diffdissq_min+np.power(dis_min_a,2))
-
-        dis_maj_c = np.sqrt(dis_maj_b*dis_maj_b-dis_maj_a*dis_maj_a)
-        dis_min_c = np.sqrt(dis_min_b*dis_min_b-dis_min_a*dis_min_a)
-        norm_maj = dis_maj_b/dis_maj_c
-        norm_min = dis_min_b/dis_min_c
-        norm = (2*np.pi*dis_maj_b*dis_min_b)
-        print('norm',norm)
+        #                             = target.shape[0], cdelt1 = 1.,
+        #                             cdelt2 = 1., amplitude_maj_a =
+        #                             1., dispersion_maj_a =
+        #                             disn_maj_a, signum_maj_a =
+        #                             sign_maj_a, amplitude_min_a = 1.,
+        #                             dispersion_min_a = disn_min_a,
+        #                             signum_min_a = sign_min_a, pa_a =
+        #                             pa_a, amplitude_maj_b = 1.,
+        #                             dispersion_maj_b = disn_maj_b,
+        #                             amplitude_min_b = 1.,
+        #                             dispersion_min_b = disn_min_b,
+        #                             signum_maj_b = sign_maj_b,
+        #                             signum_min_b = sign_min_b, pa_b =
+        #                             pa_b, dtype = target.dtype,
+        #                             centering = 'origin', forreal =
+        #                             True)
+        #
         ikernel = self._igaussian_2dp(naxis1 = target.shape[1], naxis2
                                       = target.shape[0], cdelt1 = 1.,
-                                      cdelt2 = 1.,
-                                      amplitude_maj_a = 1.,
-                                      dispersion_maj_a = dis_maj_a,
-                                      signum_maj_a = 1.,
+                                      cdelt2 = 1., amplitude_maj_a =
+                                      1., dispersion_maj_a =
+                                      dis_maj_a, signum_maj_a = 1.,
                                       amplitude_min_a = 1.,
                                       dispersion_min_a = dis_min_a,
-                                      signum_min_a = 1.,
-                                      pa_a = pa_a,
+                                      signum_min_a = 1., pa_a = pa_a,
                                       amplitude_maj_b = 1.,
                                       dispersion_maj_b = dis_maj_b,
                                       amplitude_min_b = 1.,
                                       dispersion_min_b = dis_min_b,
-                                      signum_maj_b = -1., signum_min_b =
-                                      -1., pa_b = pa_b, dtype =
-                                      target.dtype, centering =
-                                      'origin', forreal = True)
+                                      signum_maj_b = -1.,
+                                      signum_min_b = -1., pa_b =
+                                      pa_b, dtype = target.dtype,
+                                      centering = 'origin', forreal =
+                                      True)
 
         fft = pyfftw.builders.rfft2(target.copy(), planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
         itarget = fft()
 
         iconvolved = ikernel*itarget
-        #iconvolved = itarget
 
         ifft = pyfftw.builders.irfft2(iconvolved, s=target.shape, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
         convolved = ifft()
@@ -3163,65 +2923,9 @@ class Beach:
         print('')
         print('#########################################')
         return
-        ###########################################3
-        # This is to check how it looks like
-        hdu = fits.open(incubus)
-        dis_maj_b = 6.
-        dis_min_b = 6.
-        
-        hdu[0].data[:] = self._gaussian_2dp(naxis1 = target.shape[1],
-                                            naxis2 = target.shape[0],
-                                            cdelt1 = 1., cdelt2 = 1.,
-                                            amplitude_maj_b = a_maj_b,
-                                            dispersion_maj_b = dis_maj_b,
-                                            amplitude_min_b = a_min_b,
-                                            dispersion_min_b = dis_min_b,
-                                            signum_maj_b = -1.,
-                                            signum_min_b = -1., pa_b =
-                                            pa_b, dtype = hdu[0].data.dtype,
-                                            centering = 'bla', forreal
-                                            = False)
-        hdu.writeto('checktargaus.fits', overwrite = True)
-        target = hdu[0].data.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8))
-
-        kernel = self._gaussian_2dp(naxis1 = target.shape[1],
-                                            naxis2 = target.shape[0],
-                                            cdelt1 = 1., cdelt2 = 1.,
-                                            amplitude_maj_b = a_maj_b,
-                                            dispersion_maj_b = 3,
-                                            amplitude_min_b = a_min_b,
-                                            dispersion_min_b = 3.,
-                                            signum_maj_b = -1.,
-                                            signum_min_b = -1., pa_b =
-                                            pa_b, dtype = hdu[0].data.dtype,
-                                            centering = 'origin', forreal
-                                             = False)
-        hdu[0].data[:] = kernel
-        hdu.writeto('checkkergaus.fits', overwrite = True)
-        
-        fft = pyfftw.builders.fft2(target.copy(), planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        itarget = fft()
-
-        kernel = kernel.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8))
-        fft = pyfftw.builders.fft2(kernel.copy(), planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        ikernel = fft()
-
-        iconvolved = itarget/ikernel
-        #iconvolved = itarget
-
-        ifft = pyfftw.builders.ifft2(iconvolved, s=target.shape, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        hdu[0].data[:] = ifft().astype(hdu[0].data.dtype)
-        
-        hdu.writeto('checktargaus2.fits', overwrite = True)
-
-        
-        hdu.close()
-        return
-        ##############################################3
     
-    def _reconvolve(self, originplane, targetplane, originbeam, targetbeam):
-        """
-        (De-)convolve an image from an original to a targt resolution
+    def _reconvolve(self, originplane, targetplane, originbeam, targetbeam, threads = 1):
+        """(De-)convolve an image from an original to a targt resolution
 
         Input:
         originplane (ndarray): Original plane
@@ -3236,140 +2940,55 @@ class Beach:
                                position angle in rad, sin position
                                angle, cos position angle) assumed for
                                target
+        threads (int)        : Numbers of CPUs to use
         
         
-        Finds the smallest dispersion of the four given dispersions
-        (major and minor axes, original and target), determines the
-        Fourier transform of the Gaussian kernel FT(G1) that is
-        required to convolve that smallest kernel with to generate
-        original Gaussian kernel ("beam"), determines the Fourier
-        transform of the Gaussian kernel FT(G2) that is required to
-        convolve that smallest kernel with to generate target Gaussian
-        kernel ("beam"). The FFT of originplane is then divided by
-        FT(G1) and multiplied by FT(G2) and transformed back into the
-        image plane. A dispersion of 0 in this context means a delta
-        function (equivalently a constant in the Fourier domain).
+        Determines the Fourier transform FT(Go) of the Gaussian kernel
+        Go that is described by the triplet originbeam and the Fourier
+        transform FT(Gt) of the Gaussian kernel Gt described by
+        targetbeam. The FFT of originplane is then divided by FT(G1)
+        and multiplied by FT(G2) and transformed back into the image
+        plane. A dispersion of np.inf in this context means a
+        constant, a dispersion of 0 a delta function (equivalently a
+        constant in the Fourier domain).
 
         """
+        ikernel = self._igaussian_2dp(naxis1 = target.shape[1],
+                                      naxis2 = target.shape[0],
+                                      dispersion_maj_a = originbeam[0],
+                                      signum_maj_a = 1.,
+                                      dispersion_min_a = originbeam[1],
+                                      signum_min_a = 1.,
+                                      pa_a = originbeam[2],
+                                      dispersion_maj_b = targetbeam[0],
+                                      signum_maj_b = -1.,
+                                      dispersion_min_b = targetbeam[1],
+                                      signum_min_b = -1.,
+                                      pa_b = targetbeam[2],
+                                      dtype = target.dtype,
+                                      centering = 'origin',
+                                      forreal = True)
+
+        # Notice the use of threads as being passed, not from the instance
+        fft = pyfftw.builders.rfft2(targetplane, planner_effort =
+                                    None, threads = threads,
+                                    auto_align_input = True,
+                                    auto_contiguous = True, avoid_copy
+                                    = False, norm = None)
+        itargetplane = fft()
+
+        iconvolved = ikernel*itargetplane
+
+        # Notice the use of threads as being passed, not from the instance
+        ifft = pyfftw.builders.irfft2(iconvolved, s =
+                                      targetplane.shape,
+                                      planner_effort = None, threads =
+                                      threads, auto_align_input =
+                                      True, auto_contiguous = True,
+                                      avoid_copy = False, norm = None)
+        targetplane[:] = ifft()
         return
-    
-    def convoltests(self, incubus, outgaussian, calgaussianin, fftgaussianin, outcubus):
-        
-        hdu = fits.open(incubus)
-        inarray = hdu[0].data.copy()
-
-        # Point source in the middle
-        inarray[:] = 0.
-        inarray[inarray.shape[0]//2+1,inarray.shape[1]//2+1] = 1.
-
-        nx = inarray.shape[1]
-        ny = inarray.shape[0]
-        
-
-        # Coordinates centered at the origin, taking aliasing into account
-        indices = np.indices((inarray.shape[0],inarray.shape[1]), dtype = inarray.dtype)
-        indices[0][indices[0] > inarray.shape[0]/2] = indices[0][indices[0] > inarray.shape[0]/2]-inarray.shape[0]
-        indices[1][indices[1] > inarray.shape[1]/2] = indices[1][indices[1] > inarray.shape[1]/2]-inarray.shape[1]
-
-        # Half the array for the use of an analytic convolving function
-        indices2 = np.indices((inarray.shape[0],inarray.shape[1]//2+1), dtype = inarray.dtype)
-        indices2[0][indices2[0] > inarray.shape[0]/2] = indices2[0][indices2[0] > inarray.shape[0]/2]-inarray.shape[0]
-        indices2[0][:] = indices2[0][:]/inarray.shape[0]
-        indices2[1][:] = indices2[1][:]/inarray.shape[1]
-
-        # Coordinates centered at the center of the image
-        indices3 = np.indices((inarray.shape[0],inarray.shape[1]), dtype = inarray.dtype)
-        indices3[0] = indices3[0] - inarray.shape[0]//2.
-        indices3[1] = indices3[1] - inarray.shape[1]//2.
-
-        a = 1.
-        HPBW_maj = 50.
-        HPBW_min = 30.
-        dis_maj = HPBW_maj/np.sqrt(np.log(256.))
-        dis_min = HPBW_min/np.sqrt(np.log(256.))
-        dis_maj_in = 1./(2.*np.pi*dis_maj)
-        dis_min_in = 1./(2.*np.pi*dis_min)
-        pa = np.pi*0./180.
-        cospa = np.cos(pa)
-        sinpa = np.sin(pa)
-        ain = a * dis_maj * dis_min * 2. * np.pi
-
-        rotamin =  cospa*indices[1]+sinpa*indices[0]
-        rotamaj = -sinpa*indices[1]+cospa*indices[0]
-        rotamin2 =  cospa*indices2[1]+sinpa*indices2[0]
-        rotamaj2 = -sinpa*indices2[1]+cospa*indices2[0]
-        rotamin3 =  cospa*indices3[1]+sinpa*indices3[0]
-        rotamaj3 = -sinpa*indices3[1]+cospa*indices3[0]
-
-        gaussian = (a*np.exp(-(np.power(rotamaj/dis_maj,2)+np.power(rotamin/dis_min,2))/2.))
-        #hdu[0].data[:] = gaussian[:]
-        #hdu.writeto(outgaussian, overwrite = True)
-        
-        gaussian3 = (a*np.exp(-(np.power(rotamaj3/dis_maj,2)+np.power(rotamin3/dis_min,2))/2.))
-        hdu[0].data[:] = gaussian3[:]
-        hdu.writeto(outgaussian, overwrite = True)
-        
-        gaussianin = (ain*np.exp(-(np.power(rotamaj/dis_maj_in,2)+np.power(rotamin/dis_min_in,2))/2.))
-        hdu[0].data[:] = gaussianin[:]
-        hdu.writeto(calgaussianin, overwrite = True)
-
-        gaussianin2 = (ain*np.exp(-(np.power(rotamaj2/dis_maj_in,2)+np.power(rotamin2/dis_min_in,2))/2.))
-
-        inarray2 = inarray.astype(gaussian.dtype, copy = True)
-        print('g at origin', gaussian[0,0])
-        print('g at half power',gaussian[0,15])
-        print('g at half power',gaussian[25,0])
-
-        #v1 = pyfftw.interfaces.numpy_fft.fft2(gaussian)       
-        #v2 = pyfftw.interfaces.numpy_fft.fft2(inarray3)        
-        #inarray[:] = pyfftw.interfaces.numpy_fft.ifft2(v1*v2)[:] 
-        #inarray[:] = v1[:]
-        #dd = np.around(np.abs(v0), decimals=3)
-        originalshape = gaussian.shape[1]
-        #gaussian = np.pad(gaussian,((0,0),(0,0)))
-        #inarray2 = np.pad(inarray2,((0,0),(0,0)))
-        #fft = pyfftw.builders.rfft2(gaussian)
-        fft = pyfftw.builders.rfft2(gaussian3)
-        print('gaussian', gaussian.dtype, gaussian.shape)
-        print('inarray3', inarray2.dtype, inarray2.shape)
-        v1 = fft()
-        #hdu[0].data[:] = v1[:]
-        #hdu.writeto(fftgaussianin, overwrite = True)
-        
-        v2 = v1.copy()
-        print(fft.input_array.shape)
-        fft.update_arrays(inarray2.astype(fft.input_dtype),v2)
-        fft.update_arrays(gaussian.astype(fft.input_dtype),v2)
-        fft()
-        prod = gaussianin2*v2
-
-        # Produce a point source from the Gaussian
-        prod = v1/v2.copy()
-        #prod[gaussianin2 > 0.00001] = v1[gaussianin2 > 0.00001]/gaussianin2[gaussianin2 > 0.00001]
-        #prod[gaussianin2 <= 0.00001] = 1000000.
-        print('prod', prod.shape, prod.dtype)
-        ifft = pyfftw.builders.irfft2(prod, s=inarray2.shape, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        #ifft = pyfftw.builders.ifft2(prod)
-        result = ifft()
-        print(result.shape, result.dtype)
-        hdu[0].data[:] = result[:]
-        
-        print('result at centre', hdu[0].data[inarray.shape[0]//2+1, inarray.shape[1]//2+1])
-        xmin = cospa*HPBW_min/2
-        ymin = sinpa*HPBW_min/2
-        xmaj = -sinpa*HPBW_maj/2
-        ymaj = cospa*HPBW_maj/2
-        
-        print('result at half power', hdu[0].data[inarray.shape[0]//2+1+int(ymin),inarray.shape[1]//2+1+int(xmin)])
-        print('result at half power', hdu[0].data[inarray.shape[0]//2+1+int(ymaj),inarray.shape[1]//2+1+int(xmaj)])
-        print('result at half power', hdu[0].data[inarray.shape[0]//2+1+int(ymin)+1,inarray.shape[1]//2+1+int(xmin)+1])
-        print('result at half power', hdu[0].data[inarray.shape[0]//2+1+int(ymaj)+1,inarray.shape[1]//2+1+int(xmaj)+1])
-        #hdu[0].data[inarray.shape[0]//2+1+int(ymin),inarray.shape[1]//2+1+int(xmin)] = 1.
-        #hdu[0].data[inarray.shape[0]//2+1+int(ymaj),inarray.shape[1]//2+1+int(xmaj)] = 1.
-        hdu.writeto(outcubus, overwrite = True)
-        return
-  
-        
+       
 def printcubeinfo(cubename):
     print('Header info ',cubename)
     hdu1= fits.open(cubename)
