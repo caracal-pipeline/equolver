@@ -41,10 +41,10 @@ class Beach:
                        tar_bpa_slope =  ['bpa', 'madstdev', 'total'],
                        tar_bpa_absc =  0.0,
                        tar_scaling = 'freq', genbstats_exe = True, gentarget_exe = True,
-                       gentrans_exe = True, transnames = None, overwrite = True, threads = 1,
-                       verb = False):
-        """
-        Private instance variables:
+                       gentrans_exe = True, tra_fitsnames = None, tra_overwrite = True, 
+                       tra_commonbeam = True, tra_indibeam = True,
+                       threads = 1, verb = False):
+        """Private instance variables:
         (multiple: None, a float, a list of floats, a numpy array, 
          or a list with numpy arrays)
 
@@ -63,18 +63,21 @@ class Beach:
         _restfreq (multiple)  : Rest frequency default value(s)
         _bpa_replace (bool)   : Enforce usage of default values? 
 
-        _binfo_input (list)   : List of arrays of point spread func-
+        _binfo_input (list) : List of arrays of point spread func-
                                 tion, in the order of headernames and
-                                headers slowest index same as index of
-                                header in headers, followed by _bmaj,
-                                _bmin, and _bpa, fastest index
-                                channels, so it is an array of size
-                                (len(_headernames),3,chans), where
-                                chans is the number of channels.
+                                headers each array of size (chans, 6),
+                                where first column bmaj in deg, second
+                                column bmin in deg, third column bpa
+                                in deg, fourth column frequency in Hz,
+                                fifth column pixel size in deg, sixth
+                                column reference frequency divided by
+                                frequency, chans is the number of
+                                channels.
         _binfo_pixel (list)  : _binfo_input converted into pixel
                                scaling using dispersion instead of HPBW
         _bstats (dict)       : Dictionary containing all statistics
         _binfo_target (list)  : Target beam properties
+
         """
         self._initvars()
         self._verb = verb
@@ -114,7 +117,9 @@ class Beach:
         if self._gentarget_exe:
             self.gentarget(verb = self._verb)
             
-        for para in [ 'gentrans_exe', 'transnames', 'overwrite']:
+        for para in [ 'gentrans_exe', 'tra_fitsnames',
+                      'tra_overwrite', 'tra_commonbeam',
+                      'tra_indibeam']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
             
         if self._gentrans_exe:
@@ -177,10 +182,13 @@ class Beach:
         # bmaj, bmin, sin pa, cos pa, nu
         self._binfo_target = None
 
-        self._transnames = None
-        self._overwrite = None
+        self._tra_fitsnames = None
+        self._tra_overwrite = None
+        self._tra_commonbeam = None
+        self._tra_indibeam = None
 
         self._threads = None
+        self._verb = True
         return
 
     @property
@@ -636,7 +644,6 @@ class Beach:
         self._tar_bmaj_absc = 3.0
         self._binfo_target = None
         return
-
     
     @property
     def tar_bmin_inter(self):
@@ -847,6 +854,116 @@ class Beach:
         return
     
     @property
+    def gentrans_exe(self):
+        """
+        Return a copy of gentrans_exe
+        """
+        return self._gentrans_exe
+
+    @gentrans_exe.setter
+    def gentrans_exe(self, value):
+        """
+        Set gentrans_exe
+        """
+        self._gentrans_exe = value
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @gentrans_exe.deleter
+    def gentrans_exe(self):
+        self._gentrans_exe = False
+        return
+
+    @property
+    def tra_fitsnames(self):
+        """
+        Return a copy of _tra_fitsnames
+        """
+        return self._tra_fitsnames
+
+    @gentrans_exe.setter
+    def gentrans_exe(self, value):
+        """
+        Set gentrans_exe
+        """
+        self._tra_fitsnames = copy.deepcopy(value)
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @gentrans_exe.deleter
+    def tra_fitsnames(self):
+        self._tra_fitsnames = None
+        return
+
+    @property
+    def tra_overwrite(self):
+        """
+        Return a copy of verb
+        """
+        return self._tra_overwrite
+
+    @tra_overwrite.setter
+    def tra_overwrite(self, value):
+        """
+        Set tra_overwrite
+        """
+        self._tra_overwrite = value
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @tra_overwrite.deleter
+    def tra_overwrite(self):
+        self._tra_overwrite = None
+        return
+    
+    @property
+    def tra_commonbeam(self):
+        """
+        Return a copy of verb
+        """
+        return self._tra_commonbeam
+
+    @tra_commonbeam.setter
+    def tra_commonbeam(self, value):
+        """
+        Set tra_commonbeam
+        """
+        self._tra_commonbeam = value
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @tra_commonbeam.deleter
+    def tra_commonbeam(self):
+        self._tra_commonbeam = True
+        return
+
+    @property
+    def tra_indibeam(self):
+        """
+        Return a copy of tra_indibeam
+        """
+        return self._tra_indibeam
+
+    @tra_indibeam.setter
+    def tra_indibeam(self, value):
+        """
+        Set tra_indibeam
+        """
+        self._tra_indibeam = value
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @tra_indibeam.deleter
+    def tra_indibeam(self):
+        self._tra_indibeam = True
+        return
+
+    @property
     def binfo_input(self):
         """
         Return a copy of binfo_input
@@ -874,6 +991,46 @@ class Beach:
         self._binfo_input = None
     
     @property
+    def verb(self):
+        """
+        Return a copy of verb
+        """
+        return self._verb
+
+    @verb.setter
+    def verb(self, value):
+        """
+        Set verb
+        """
+        self._verb = value
+        return
+
+    @verb.deleter
+    def verb(self):
+        self._verb = False
+        return
+
+    @property
+    def threads(self):
+        """
+        Return a copy of verb
+        """
+        return self._threads
+
+    @threads.setter
+    def threads(self, value):
+        """
+        Set threads
+        """
+        self._threads = threads
+        return
+
+    @threads.deleter
+    def threads(self):
+        self._threads = None
+        return
+    
+    @property
     def binfo_pixel(self):
         """
         Return a copy of binfo_pixel
@@ -893,26 +1050,6 @@ class Beach:
         Return a copy of bstats
         """
         return copy.deepcopy(self._bstats)
-
-    @property
-    def verb(self):
-        """
-        Return a copy of verb
-        """
-        return self._verb
-
-    @verb.setter
-    def verb(self, value):
-        """
-        Set verb
-        """
-        self._verb = value
-        return
-
-    @verb.deleter
-    def verb(self):
-        self._verb = False
-        return
 
     def _unitsconv(self, quantity, units = None):
         """
@@ -1017,7 +1154,7 @@ class Beach:
                 naxis3 = 1
         
 
-            self._binfo_input.append(np.empty((naxis3,5,)))
+            self._binfo_input.append(np.empty((naxis3,6,)))
             self._binfo_input[-1][:] = np.nan
         return
 
@@ -1188,7 +1325,7 @@ class Beach:
         bpa_replace (bool) : Enforce usage of default values? 
 
         Note that if None is passed as a value, the input is ignored
-        if self._quantity is not None. I that case
+        if self._quantity is not None.
         """
         stop = self._initbinfo_inputvar(bmaj = bmaj,
                                         bmaj_replace = bmaj_replace,
@@ -1312,21 +1449,21 @@ class Beach:
             # Determine the scaling of the beam properties
             # Spectral cube and constant cells means that the beam
             # changes reciprocal to frequency
-            dscal = 1.
+            self._binfo_input[i][:,5] = np.ones(self._binfo_input[i].shape[0])
             if cellscal_use_constant:
                 if not type(wcshand2) == type(None):
                     if not np.isnan(self._binfo_input[i][:,3].sum()):
-                        dscal = wcshand2.crval[2]/ \
+                        self._binfo_input[i][:,5] = wcshand2.crval[2]/ \
                             self._binfo_input[i][:,3]
 
             # finlist: slowest index cube in 'headers' list, followed
             # by bmaj, bmin, and bpa
             self._binfo_input[i][:,0] = self._getchanval( \
                 'BMAJ', self._headers[i], value = bmaj[i],
-                usevalue = bmaj_replace, usedefault = True, dscal = dscal)
+                 usevalue = bmaj_replace, usedefault = True, dscal = self._binfo_input[i][:,5])
             self._binfo_input[i][:,1] = self._getchanval( \
                 'BMIN', self._headers[i], value = bmin[i],
-                usevalue = bmin_replace, usedefault = True, dscal = dscal)
+                usevalue = bmin_replace, usedefault = True, dscal = self._binfo_input[i][:,5])
             self._binfo_input[i][:,2] = self._getchanval( \
                 'BPA', self._headers[i], value = bpa[i],
                 usevalue = bpa_replace, usedefault = True)
@@ -1516,13 +1653,8 @@ class Beach:
             boutfarray[:,0] = binfarray[:,0]/binfarray[:,4]/np.sqrt(np.log(256))
             boutfarray[:,1] = binfarray[:,1]/binfarray[:,4]/np.sqrt(np.log(256))
 
-            # Scale to cos pa and sin pa
+            # Scale to rad
             boutfarray[:,2] = np.pi*binfarray[:,2]/180.
-            boutfarray[:,3] = np.sin(boutfarray[:,2])
-            boutfarray[:,4] = np.cos(boutfarray[:,2])
-
-            # Copy frequency
-            # boutfarray[:,4] = binfarray[:,3]
             
             self._binfo_pixel.append(boutfarray)
         return
@@ -2295,8 +2427,9 @@ class Beach:
 
         return
 
-    def _initgentransvar(self, transnames = None, overwrite = None,
-                         threads = None, verb = None):
+    def _initgentransvar(self, tra_fitsnames = None, tra_overwrite =
+                         None, tra_commonbeam = None, tra_indibeam =
+                         None, threads = None, verb = None):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -2313,14 +2446,15 @@ class Beach:
                     output = True
         return output
             
-    def gentrans(self, transnames = None, overwrite = None,
+    def gentrans(self, tra_fitsnames = None, tra_overwrite = None,
+                       tra_commonbeam = None, tra_indibeam = None,
                        threads = None, verb = None):
         """
         (De-)convolve input data cubes or images to target beam shapes
 
         Input:
-        transnames (str or list of str): Output fits file names
-        overwrite (bool)               : Overwrite output if already
+        tra_fitsnames (str or list of str): Output fits file names
+        tra_overwrite (bool)               : Overwrite output if already
                                          existent (True: yes)?
 
         Serially opens all cubes (images) listed in inputnames and
@@ -2328,9 +2462,11 @@ class Beach:
         the target structure.
 
         """
-        stop = self._initgentransvar(transnames = transnames,
-                                     overwrite = overwrite, verb =
-                                     verb, threads = threads)
+        stop = self._initgentransvar(tra_fitsnames = tra_fitsnames,
+                                     tra_overwrite = tra_overwrite,
+                                     tra_commonbeam = tra_commonbeam,
+                                     tra_indibeam = tra_indibeam, verb
+                                     = verb, threads = threads)
         if stop:
             if verb or self._verb:
                 warnings.warn('Parameters missing. Not generating output data'+ \
@@ -2347,11 +2483,11 @@ class Beach:
                               'Not generating output.')
             return
 
-        # Also check if transnames have the same type and number as inputnames
-        if type(self._transnames) == type(''):
-            transn = [self._transnames]
+        # Also check if tra_fitsnames have the same type and number as inputnames
+        if type(self._tra_fitsnames) == type(''):
+            transn = [self._tra_fitsnames]
         else:
-            transn = self._transnames
+            transn = self._tra_fitsnames
 
         if type(self._cubenames) == type(''):
             cuben = [self._cubenames]
@@ -2391,8 +2527,48 @@ class Beach:
             incubus[0].image[:] = outcubus_image.astype(incubus[0].image.dtype)
 
             # Here we are missing the bit to update the header info
+            if self._tra_commonbeam:
+                if self._tar_scaling == 'freq':
+
+                    # For each cube calculate the average beam
+                    # normalised to the reference frequency dscal is
+                    # the scale per cube w.r.t. the reference pixel,
+                    # reference frequency divided by frequency for
+                    # each channel
+                    divisor = self._binfo_input[i][:,5]
+                    beamscal = '1/F'
+                else:
+                    divisor = 1.
+                    beamscal = 'CONSTANT'
+
+                # Divide by reference frequency divided by
+                # frequency, then multiply with pixel size, then
+                # take average, if user intelligent, then the average
+                # is identical to the scaled value for every channel
+                bmajav = np.average((self._binfo_target[i][:,0]/divisor)*
+                                    self._binfo_target[i][:,4])
+                bminav = np.average((self._binfo_target[i][:,1]/divisor)*
+                                    self._binfo_target[i][:,4])
+                bpav = np.average(180.*self._binfo_target[i][:,2]/np.pi)
+                
+                incubus[0].header['BMAJ'] = bmajav
+                incubus[0].header['BMIN'] = bminav
+                incubus[0].header['BPA'] = bpav
+                incubus[0].header['BEAMSCAL'] = beamscal
             
-        
+            if self._tra_indibeam:
+                
+                # Here just copy all target beam properties into the header
+                for j in range(len(self._binfo_input[i][:,0])):
+                    incubus[0].header['BMAJ{:d}'.format(j+1)] = self._binfo_target[i][:,0]*\
+                                    self._binfo_target[i][:,4]
+                    incubus[0].header['BMIN{:d}'.format(j+1)] = self._binfo_target[i][:,1]*\
+                                    self._binfo_target[i][:,4]
+                    incubus[0].header['BPA{:d}'.format(j+1)] = 180.*self._binfo_target[i][:,2]/np.pi
+
+            # Finally write and close cube
+            incubus.writeto('self._tra_fitsnames', overwrite = self._tra_overwrite)
+            incubus.close()
         return
 
     def _gaussian_2dp(self, naxis1 = 100, naxis2 = 100, cdelt1 = 1.,
@@ -2447,7 +2623,9 @@ class Beach:
         centering = 'origin'    : centre on 'origin' (pixel 0,0) and
                                   assume that for pixel > naxisi//2
                                   pixel = pixel-naxisi or on 'centre'
-                                  to place the Gaussian at naxisi//2
+                                  to place the Gaussian at naxisi//2,
+                                  alternatively provide center as a 
+                                  pair of float [x1,x2]
         forreal                 : Only relevant for centering = 
                                   'origin'. Assume the map to be the 
                                   result of a real Fourier 
@@ -2489,8 +2667,11 @@ class Beach:
 
                 # If for a real transformation only one axis
                 indices[1][indices[1] > naxis1/2] = indices[1][indices[1] > naxis1/2]-naxis1
-        else:
                 
+        elif type(centering) == type([]):
+            indices[0] = indices[0] - centering[1]
+            indices[1] = indices[1] - centering[0]          
+        else:
             # Centered on the centre of the map
             indices[0] = indices[0] - naxis2//2.
             indices[1] = indices[1] - naxis1//2.
@@ -2535,10 +2716,6 @@ class Beach:
         adjusted. The Array returned can be used in Fourier space
 
         """
-        print('dmaa_igau_1', signum_maj_a, dispersion_maj_a)
-        print('dmia_igau_1', signum_min_a, dispersion_min_a)
-        print('dmab_igau_1', signum_maj_b, dispersion_maj_b)
-        print('dmib_igau_1', signum_min_b, dispersion_min_b)
 
         cdelt1 = 1./(cdelt1*naxis1)
         cdelt2 = 1./(cdelt2*naxis2)
@@ -2596,121 +2773,191 @@ class Beach:
                                   dtype, centering = centering, forreal =
                                   forreal)
 
-    def convoltests2(self, incubus = None, targetname = None, outgaussian_center = None, outgaussian_origin = None, outgaussian_fftconv = None, outgaussian_rfftconv = None, outgaussian_convcalc = None, outgaussian_rconvcalc = None, puregaussian = None, outgaussian_rshapechange = None):
+    def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = 'gaussian_at_centre.fits', gaussian_at_origin = 'gaussian_at_origin.fits', real_fft_conv = 'real_fft_conv.fits', real_fft_conv_calc = 'real_fft_conv_calc.fits', reconvolve_input_image = 'reconvolve_input_image.fits', reconvolve_output_image = 'reconvolve_output_image.fits'):
+
+        threads = 1
         
-        hdu = fits.open(incubus)
+        print()
+        print('#########################################')
+        print()
+        print('Exercises in FFT convolutions')
+        print()
+        print('#########################################')
+        print()
+        print('Make a map with Point source at centre')
+        print()
+
+        newar = np.zeros((1025,513), dtype = '>f4')
+        newar[newar.shape[0]//2,newar.shape[1]//2] = 1.
+
+        hdu = fits.HDUList([fits.PrimaryHDU(newar)])
         target = hdu[0].data.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8))
 
-        # Point source in the middle
-        target[:] = 0.
-        target[target.shape[0]//2,target.shape[1]//2] = 1.
+        hdu[0].data[:] = target.astype(newar.dtype)
+        print('Result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
 
-        hdu[0].data[:] = target[:]
-        hdu.writeto(targetname, overwrite = True)
-
-        a = 1.
-        HPBW_maj = 50.
-        HPBW_min = 30.
-        dis_maj = HPBW_maj/np.sqrt(np.log(256.))
-        dis_min = HPBW_min/np.sqrt(np.log(256.))
-        dis_maj_in = 1./(2.*np.pi*dis_maj)
-        dis_min_in = 1./(2.*np.pi*dis_min)
-        pa = np.pi*30./180.
-        xmin = np.cos(pa)*HPBW_min/2
-        ymin = np.sin(pa)*HPBW_min/2
-        xmaj = -np.sin(pa)*HPBW_maj/2
-        ymaj = np.cos(pa)*HPBW_maj/2
-        print(xmin, ymin)
-        print(xmaj, ymaj)
-
+        hdu.writeto(point_source, overwrite = True)
+        print('Image to be found at', point_source)
+        hdu.close()
 
         print()
         print('#########################################')
         print()
         print('Make a map with Gaussian at centre')
         print()
-        hdu[0].data[:] = self._gaussian_2dp(naxis1 = target.shape[1],
-                                            naxis2 = target.shape[0],
-                                            cdelt1 = 1., cdelt2 = 1.,
-                                            amplitude_maj_a = 1.,
-                                            dispersion_maj_a =
-                                            dis_maj, signum_maj_a =
-                                            -1., amplitude_min_a = 1.,
-                                            dispersion_min_a =
-                                            dis_min, signum_min_a =
-                                            -1., pa_a = pa,
-                                            amplitude_maj_b = 1.,
-                                            dispersion_maj_b = np.inf,
-                                            amplitude_min_b = 1.,
-                                            dispersion_min_b = np.inf,
-                                            signum_maj_b = 1.,
-                                            signum_min_b = 1., pa_b =
-                                            0., dtype = target.dtype,
-                                            centering = 'bla', forreal
-                                            = False)
+
+        newar = np.zeros((1025,513), dtype = '>f4')
+        hdu = fits.HDUList([fits.PrimaryHDU(newar)])
+        target = hdu[0].data.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8))
+
+        # Generate Gaussian
+        sign_maj_a = -1.
+        amp_maj_a = 1.
+        HPBW_maj_a = 8.
+        sign_min_a = -1.
+        amp_min_a = 1.
+        HPBW_min_a = 8.
+        pang_a = 30.
+        
+        dis_maj_a = HPBW_maj_a/np.sqrt(np.log(256.))
+        dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
+        pa_a = np.pi*30./180.
+
+        hdu[0].data[:] = self._gaussian_2dp( naxis1 =
+                                             target.shape[1], naxis2 =
+                                             target.shape[0], cdelt1 =
+                                             1., cdelt2 = 1.,
+                                             amplitude_maj_a =
+                                             amp_maj_a,
+                                             dispersion_maj_a =
+                                             dis_maj_a, signum_maj_a =
+                                             sign_maj_a,
+                                             amplitude_min_a =
+                                             amp_min_a,
+                                             dispersion_min_a =
+                                             dis_min_a, signum_min_a =
+                                             sign_min_a, pa_a = pa_a,
+                                             dtype = target.dtype,
+                                             centering = 'bla',
+                                             forreal = False).astype(hdu[0].data.dtype)
         
         print('result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
+
+        xmin = np.cos(pa_a)*HPBW_min_a/2
+        ymin = np.sin(pa_a)*HPBW_min_a/2
+        xmaj = -np.sin(pa_a)*HPBW_maj_a/2
+        ymaj = np.cos(pa_a)*HPBW_maj_a/2
+
         print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
         print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
+        
         hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2] += 2
         hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)] += 2.
         hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)] += 2.
-        hdu.writeto(outgaussian_center, overwrite = True)
-        print('Image to be found at', outgaussian_center)
+        hdu.writeto(gaussian_at_centre, overwrite = True)
+        print('Image to be found at', gaussian_at_centre)
+        hdu.close()
         
         print()
         print('#########################################')
         print()
         print('Generate Gaussian at origin')
         print()
-        hdu[0].data[:] = self._gaussian_2dp(naxis1 = target.shape[1],
-                                            naxis2 = target.shape[0],
-                                            cdelt1 = 1., cdelt2 = 1.,
-                                            amplitude_maj_a = 1.,
-                                            dispersion_maj_a =
-                                            dis_maj, signum_maj_a =
-                                            -1., amplitude_min_a = 1.,
-                                            dispersion_min_a =
-                                            dis_min, signum_min_a =
-                                            -1., pa_a = pa,
-                                            amplitude_maj_b = 1.,
-                                            dispersion_maj_b = np.inf,
-                                            amplitude_min_b = 1.,
-                                            dispersion_min_b = np.inf,
-                                            signum_maj_b = 1.,
-                                            signum_min_b = 1., pa_b =
-                                            0., dtype = target.dtype,
-                                            centering = 'origin',
-                                            forreal = False)
+        
+        newar = np.zeros((1025,513), dtype = '>f4')
+        hdu = fits.HDUList([fits.PrimaryHDU(newar)])
+        target = hdu[0].data.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8))
 
-        print('result at centre', hdu[0].data[0,0])
-        print('result at half power', hdu[0].data[int(ymin), int(xmin)])
-        print('result at half power', hdu[0].data[int(ymaj), int(xmaj)])
-        hdu.writeto(outgaussian_origin, overwrite = True)
-        print('Image to be found at', outgaussian_origin)
+        # Generate Gaussian
+        sign_maj_a = -1.
+        amp_maj_a = 1.
+        HPBW_maj_a = 8.
+        sign_min_a = -1.
+        amp_min_a = 1.
+        HPBW_min_a = 8.
+        pang_a = 30.
+        
+        dis_maj_a = HPBW_maj_a/np.sqrt(np.log(256.))
+        dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
+        pa_a = np.pi*30./180.
+
+        hdu[0].data[:] = self._gaussian_2dp( naxis1 =
+                                             target.shape[1], naxis2 =
+                                             target.shape[0], cdelt1 =
+                                             1., cdelt2 = 1.,
+                                             amplitude_maj_a =
+                                             amp_maj_a,
+                                             dispersion_maj_a =
+                                             dis_maj_a, signum_maj_a =
+                                             sign_maj_a,
+                                             amplitude_min_a =
+                                             amp_min_a,
+                                             dispersion_min_a =
+                                             dis_min_a, signum_min_a =
+                                             sign_min_a, pa_a = pa_a,
+                                             dtype = target.dtype,
+                                             centering = 'origin',
+                                             forreal = False).astype(hdu[0].data.dtype)
+        
+        print('result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
+
+        xmin = np.cos(pa_a)*HPBW_min_a/2
+        ymin = np.sin(pa_a)*HPBW_min_a/2
+        xmaj = -np.sin(pa_a)*HPBW_maj_a/2
+        ymaj = np.cos(pa_a)*HPBW_maj_a/2
+
+        print('result at half power', hdu[0].data[int(ymin),int(xmin)])
+        print('result at half power', hdu[0].data[int(ymaj),int(xmaj)])
+        
+        hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2] += 2.
+        hdu[0].data[int(ymin),int(xmin)] += 2.
+        hdu[0].data[int(ymaj),int(xmaj)] += 2.
+        hdu.writeto(gaussian_at_origin, overwrite = True)
+        print('Image to be found at', gaussian_at_origin)
+        hdu.close()
         print('')
+        
         print('#########################################')
         print()
         print('Do a real FFT convolution')
 
-        kernel = self._gaussian_2dp(naxis1 = target.shape[1], naxis2 =
-                                    target.shape[0], cdelt1 = 1.,
-                                    cdelt2 = 1., amplitude_maj_a = 1.,
-                                    dispersion_maj_a = dis_maj,
-                                    signum_maj_a = -1.,
-                                    amplitude_min_a = 1.,
-                                    dispersion_min_a = dis_min,
-                                    signum_min_a = -1., pa_a = pa,
-                                    amplitude_maj_b = 1.,
-                                    dispersion_maj_b = np.inf,
-                                    amplitude_min_b =
-                                    1.,dispersion_min_b = np.inf,
-                                    signum_maj_b = 1., signum_min_b =
-                                    1., pa_b = 0., dtype =
-                                    target.dtype, centering =
-                                    'origin', forreal = False)
+        newar = np.zeros((1025,513), dtype = '>f4')
+        newar[newar.shape[0]//2,newar.shape[1]//2] = 1.
         
-        fft = pyfftw.builders.rfft2(kernel, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
+        hdu = fits.HDUList([fits.PrimaryHDU(newar)])
+        target = hdu[0].data.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8))
+
+        # Generate Gaussian
+        sign_maj_a = -1.
+        amp_maj_a = 1.
+        HPBW_maj_a = 8.
+        sign_min_a = -1.
+        amp_min_a = 1.
+        HPBW_min_a = 8.
+        pang_a = 30.
+        
+        dis_maj_a = HPBW_maj_a/np.sqrt(np.log(256.))
+        dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
+        pa_a = np.pi*30./180.
+
+        kernel = self._gaussian_2dp(naxis1 = target.shape[1], naxis2 =
+                                    target.shape[0], cdelt1 =
+                                    1., cdelt2 = 1.,
+                                    amplitude_maj_a =
+                                    amp_maj_a,
+                                    dispersion_maj_a =
+                                    dis_maj_a, signum_maj_a =
+                                    sign_maj_a,
+                                    amplitude_min_a =
+                                    amp_min_a,
+                                    dispersion_min_a =
+                                    dis_min_a, signum_min_a =
+                                    sign_min_a, pa_a = pa_a,
+                                    dtype = target.dtype,
+                                    centering = 'origin',
+                                    forreal = False)
+        
+        fft = pyfftw.builders.rfft2(kernel, planner_effort=None, threads=threads, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
         ikernel = fft()
 
         itarget = ikernel.copy()
@@ -2718,116 +2965,176 @@ class Beach:
         fft()
         iconvolved = ikernel*itarget
 
-        ifft = pyfftw.builders.irfft2(iconvolved, s=target.shape, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
+        ifft = pyfftw.builders.irfft2(iconvolved, s=target.shape, planner_effort=None, threads=threads, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
         convolved = ifft()
         
         hdu[0].data[:] = convolved.astype(hdu[0].data.dtype)
         
+        xmin = np.cos(pa_a)*HPBW_min_a/2
+        ymin = np.sin(pa_a)*HPBW_min_a/2
+        xmaj = -np.sin(pa_a)*HPBW_maj_a/2
+        ymaj = np.cos(pa_a)*HPBW_maj_a/2
+
         print('result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
         print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
         print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
         hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2] += 2
         hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)] += 2.
         hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)] += 2.
-        hdu.writeto(outgaussian_rfftconv, overwrite = True)
-        print('Image to be found at', outgaussian_rfftconv)
-        print('')
-        print('#########################################')        
+        hdu.writeto(real_fft_conv, overwrite = True)
+        print('Image to be found at', real_fft_conv)
+        hdu.close()
         print()
+        
         print('#########################################')
         print()
         print('Do a real FFT convolution with a Gaussian calculated in the Fourier domain')
 
+        newar = np.zeros((1025,513), dtype = '>f4')
+        newar[newar.shape[0]//2,newar.shape[1]//2] = 1.
+
+        hdu = fits.HDUList([fits.PrimaryHDU(newar)])
+        target = hdu[0].data.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8))
+
+        # Generate Gaussian
+        sign_maj_a = -1.
+        amp_maj_a = 1.
+        HPBW_maj_a = 8.
+        sign_min_a = -1.
+        amp_min_a = 1.
+        HPBW_min_a = 8.
+        pang_a = 30.
+        
+        dis_maj_a = HPBW_maj_a/np.sqrt(np.log(256.))
+        dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
+        pa_a = np.pi*30./180.
+
         ikernel = self._igaussian_2dp(naxis1 = target.shape[1], naxis2
                                       = target.shape[0], cdelt1 = 1.,
-                                      cdelt2 = 1., amplitude_maj_b = 1.,
-                                      dispersion_maj_b = dis_maj,
-                                      signum_maj_b = -1.,
-                                      amplitude_min_b = 1.,
-                                      dispersion_min_b = dis_min,
-                                      signum_min_b = -1., pa_b = pa,
+                                      cdelt2 = 1., amplitude_maj_a = amp_maj_a,
+                                      dispersion_maj_a = dis_maj_a,
+                                      signum_maj_a = sign_maj_a,
+                                      amplitude_min_a = amp_min_a,
+                                      dispersion_min_a = dis_min_a,
+                                      signum_min_a = sign_min_a, pa_a = pa_a,
                                       dtype =
                                       target.dtype, centering =
                                       'origin', forreal = True)
 
-        print('tc', target.copy().dtype)
-        print('tc', target.copy().shape)
-        fft = pyfftw.builders.rfft2(target.copy(), planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
+        fft = pyfftw.builders.rfft2(target.copy(), planner_effort=None, threads=threads, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
         itarget = fft()
 
-        print('t',itarget.shape)
-        print('k',ikernel.shape)
-        #itarget = pyfftw.interfaces.numpy_fft.fft2(tarcopy)
         iconvolved = ikernel*itarget
 
-        #ifft = pyfftw.builders.ifft2(iconvolved)
-        #result = ifft()
-        ifft = pyfftw.builders.irfft2(iconvolved, s=target.shape, planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
-        #convolved = pyfftw.interfaces.numpy_fft.ifft2(iconvolved)
+        ifft = pyfftw.builders.irfft2(iconvolved, s=target.shape, planner_effort=None, threads=threads, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
         convolved = ifft()
         
         hdu[0].data[:] = convolved.astype(hdu[0].data.dtype)
         
         print('result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
+
+        xmin = np.cos(pa_a)*HPBW_min_a/2
+        ymin = np.sin(pa_a)*HPBW_min_a/2
+        xmaj = -np.sin(pa_a)*HPBW_maj_a/2
+        ymaj = np.cos(pa_a)*HPBW_maj_a/2
+        
         print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
         print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
         hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2] += 2
         hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)] += 2.
         hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)] += 2.
-        hdu.writeto(outgaussian_rconvcalc, overwrite = True)
+        hdu.writeto(real_fft_conv_calc, overwrite = True)
+        print('Image to be found at', real_fft_conv_calc)
         hdu.close()
-        print('Image to be found at', outgaussian_rconvcalc)
-        print('')
-        print('#########################################')
         
         print()
         print('#########################################')
         print()
         print('Finally do the magic to turn an existing Gaussian into another')
 
-        # Load image
-        hdu = fits.open(incubus)
+        newar = np.zeros((1025,513), dtype = '>f4')
+        hdu = fits.HDUList([fits.PrimaryHDU(newar)])
+        target = hdu[0].data.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8))
 
         # Generate Gaussian
-        a_maj_a = 1.
-        a_min_a = 1.
+        sign_maj_a = -1.
+        amp_maj_a = 1.
         HPBW_maj_a = 8.
+        sign_min_a = -1.
+        amp_min_a = 1.
         HPBW_min_a = 8.
+        pang_a = 30.
+        
         dis_maj_a = HPBW_maj_a/np.sqrt(np.log(256.))
         dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
         pa_a = np.pi*30./180.
+
+        hdu[0].data[:] = self._gaussian_2dp( naxis1 =
+                                             target.shape[1], naxis2 =
+                                             target.shape[0], cdelt1 =
+                                             1., cdelt2 = 1.,
+                                             amplitude_maj_a =
+                                             amp_maj_a,
+                                             dispersion_maj_a =
+                                             dis_maj_a, signum_maj_a =
+                                             sign_maj_a,
+                                             amplitude_min_a =
+                                             amp_min_a,
+                                             dispersion_min_a =
+                                             dis_min_a, signum_min_a =
+                                             sign_min_a, pa_a = pa_a,
+                                             dtype = target.dtype,
+                                             centering = 'bla',
+                                             forreal = False).astype(hdu[0].data.dtype)
         
-        hdu[0].data[:] = self._gaussian_2dp(naxis1 = target.shape[1],
-                                            naxis2 = target.shape[0],
-                                            cdelt1 = 1., cdelt2 = 1.,
-                                            amplitude_maj_a = a_maj_a,
-                                            dispersion_maj_a =
-                                            dis_maj_a, signum_maj_a =
-                                            -1., amplitude_min_a = a_min_a,
-                                            dispersion_min_a =
-                                            dis_min_a, signum_min_a =
-                                            -1., pa_a = pa_a,
-                                            dtype = hdu[0].data.dtype,
-                                            centering = 'bla', forreal
-                                            = False)
-        hdu.writeto(puregaussian, overwrite = True)
+        print('Original result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
+
+        xmin = np.cos(pa_a)*HPBW_min_a/2
+        ymin = np.sin(pa_a)*HPBW_min_a/2
+        xmaj = -np.sin(pa_a)*HPBW_maj_a/2
+        ymaj = np.cos(pa_a)*HPBW_maj_a/2
+
+        print('Original result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
+        print('Original result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
+        
+        hdu.writeto(reconvolve_input_image, overwrite = True)
+        print('Image pure Gaussian to be found at', reconvolve_input_image)
         hdu.close()
 
-        hdu = fits.open(puregaussian)
-        target = hdu[0].data.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8*4))
+
+        hdu = fits.open(reconvolve_input_image)
+        target = hdu[0].data.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8))
+
+        # This is repeating the stuff above with an important
+        # difference: signum of a is inverted
+        sign_maj_a = -1.
+        amp_maj_a = 1.
+        HPBW_maj_a = 8.
+        sign_min_a = -1.
+        amp_min_a = 1.
+        HPBW_min_a = 8.
+        pang_a = 30.
+
+        # Happens here
+        sign_maj_a = -sign_maj_a
+        sign_min_a = -sign_min_a
+
+        dis_maj_a = HPBW_maj_a/np.sqrt(np.log(256.))
+        dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
+        pa_a = np.pi*pang_a/180.
 
         # This is now the Gaussian that we want
+        sign_maj_b = -1.
         a_maj_b = 1.
-        a_min_b = 1.
         HPBW_maj_b = 9.
+        sign_min_b = -1.
+        a_min_b = 1.
         HPBW_min_b = 8.
+        pang_b = 0.
+        
         dis_maj_b = HPBW_maj_b/np.sqrt(np.log(256.))
         dis_min_b = HPBW_min_b/np.sqrt(np.log(256.))
-        pa_b = np.pi*0./180.
-        xmin = np.cos(pa_b)*HPBW_min_b/2
-        ymin = np.sin(pa_b)*HPBW_min_b/2
-        xmaj = -np.sin(pa_b)*HPBW_maj_b/2
-        ymaj = np.cos(pa_b)*HPBW_maj_b/2
+        pa_b = np.pi*pang_b/180.
 
         # The following is an old strategy, (de-)convolving the
         # original image with the minimally required beam. Has been
@@ -2887,22 +3194,22 @@ class Beach:
         ikernel = self._igaussian_2dp(naxis1 = target.shape[1], naxis2
                                       = target.shape[0], cdelt1 = 1.,
                                       cdelt2 = 1., amplitude_maj_a =
-                                      1., dispersion_maj_a =
-                                      dis_maj_a, signum_maj_a = 1.,
-                                      amplitude_min_a = 1.,
+                                      amp_maj_a, dispersion_maj_a =
+                                      dis_maj_a, signum_maj_a = sign_maj_a,
+                                      amplitude_min_a = amp_min_a,
                                       dispersion_min_a = dis_min_a,
-                                      signum_min_a = 1., pa_a = pa_a,
-                                      amplitude_maj_b = 1.,
+                                      signum_min_a = sign_min_a, pa_a = pa_a,
+                                      amplitude_maj_b = a_maj_b,
                                       dispersion_maj_b = dis_maj_b,
-                                      amplitude_min_b = 1.,
+                                      amplitude_min_b = a_min_b,
                                       dispersion_min_b = dis_min_b,
-                                      signum_maj_b = -1.,
-                                      signum_min_b = -1., pa_b =
+                                      signum_maj_b = sign_maj_b,
+                                      signum_min_b = sign_min_b, pa_b =
                                       pa_b, dtype = target.dtype,
                                       centering = 'origin', forreal =
                                       True)
 
-        fft = pyfftw.builders.rfft2(target.copy(), planner_effort=None, threads=7, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
+        fft = pyfftw.builders.rfft2(target.copy(), planner_effort=None, threads= threads, auto_align_input=True, auto_contiguous=True, avoid_copy=False, norm=None)
         itarget = fft()
 
         iconvolved = ikernel*itarget
@@ -2911,15 +3218,21 @@ class Beach:
         convolved = ifft()
         
         hdu[0].data[:] = convolved.astype(hdu[0].data.dtype)
+
+        xmin = np.cos(pa_b)*HPBW_min_b/2
+        ymin = np.sin(pa_b)*HPBW_min_b/2
+        xmaj = -np.sin(pa_b)*HPBW_maj_b/2
+        ymaj = np.cos(pa_b)*HPBW_maj_b/2
         
-        print('result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
-        print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
-        print('result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
+        print('Final result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
+        print('Final result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
+        print('Final result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
         hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2] += 2
         hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)] += 2.
         hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)] += 2.
-        hdu.writeto(outgaussian_rshapechange, overwrite = True)
-        print('Image to be found at', outgaussian_rshapechange)
+        hdu.writeto(reconvolve_output_image, overwrite = True)
+        print('Image to be found at', reconvolve_output_image)
+        hdu.close()
         print('')
         print('#########################################')
         return
@@ -2988,6 +3301,177 @@ class Beach:
                                       avoid_copy = False, norm = None)
         targetplane[:] = ifft()
         return
+
+    def createstcubes(self, gauprops = [], outcubi = [], naxis = 4, naxis1 = 257, naxis2 = 513, pixelsize = 8.3333335E-04, ctype3 = 'VRAD', channelwidth = 5000, cellscal = None, restfreq = None, bmaj = None, bmin = None, bpa = None, noputinheader = [], overwrite = True):
+        """Create a set of cubes to test beach
+
+        Input:
+        gauprops (list of ndarrays)   : Properties of Gaussians generated
+        outcubi (list of str)         : Names of output cubes
+        naxis  (int)                  : Number of axes
+        naxis1 (int)                  : Size of cubes axis 1
+        naxis2 (int)                  : Size of cubes axis 2
+        pixelsize (float)             : Spacial pixel size in deg
+        channelwidth (float)          : Channel width in m/s
+        cellscal (None type or str)   : CELLSCAL, if None, no CELLSCAL
+        restfreq (None type or float) : Rest frequency
+        bmaj (None type or float)     : BMAJ, if None, no BMAJ
+        bmin (None type or float)     : BMIN, if None, no BMIN
+        bpa (None type or float)      : BPA, if None, no BPA
+        noputinheader (list of lists) : List of lists of elements that
+                                        should not appear in the
+                                        headers
+        overwrite (bool)              : Overwrite existing cubes?
+                                        True: yes
+
+        gauprops is a list of properties of single plane images of the
+        cubes generated. The number of list elements is the number of
+        cubes produced. Their names are listed in outcubi (which has
+        to have as many elements as gauprops). The method produces
+        cubes with one Gaussian in each plane. Each element of
+        gauprops is an 2D ndarray with size (planes, 6), where planes
+        is the number of planes, and the columns denote in that order,
+        central position x in pixels (starting at 0), central position
+        in y in pixels (starting at 0), amplitude, beam major HPBW in
+        pixels, beam minor HPBW in pixels, beam position angle. Each
+        cube has the same number naxis of axes, RA, DEC, VRAD (if
+        naxis > 2), STOKES (if naxis > 3). If naxis < 3 (we hence
+        produce not a cube but only one image), the elements of
+        gauprops should accordingly have only one row. The data type
+        is always intensity with the unit Jy/beam, the projection type
+        is always sine projection J2000, and the cubes are centered on
+        RA = 60 deg and DEC = -30 deg. The numbers of pixels in RA and
+        DEC direction is the same for all cubes, in ctype3 direction
+        it is determined by the number of rows in the corresponding
+        elements in gauprops, the length of the STOKES axis is always
+        1. The pixel size in RA and DEC direction is always the same
+        and determined by the parameter pixelsize. The type of the
+        third axis is determined by the keyword ctype3. The channel
+        width is the same for all cubes and determined by the
+        parameter channelwidth. The keyword cellscal ('CONSTANT' or
+        '1/F') can be set by the parameter cellscal (if set to None,
+        no keyword will appear in the header). Parameters restfreq
+        (rest frequency in Hz), bmaj (average beam major axis HPBW in
+        deg), bmin (average beam minor axis HPBW in deg), bpa (average
+        beam position angle in deg) set the corresponding keywords in
+        the headers. Choose '1420405745.51' for restfreq if you want
+        the HI rest frequency.
+
+        For each Gaussian generated with gauprops, the keywords BMAJi,
+        BMINi, BPAi are generated in the header with the measures as
+        specified in gauprops, unless they appear in the noputinheader
+        list. noputinheader is a list of lists of strings. Each list
+        in noputinheader specifies the keywords (works only for
+        'BMAJi', 'BMINi', 'BPAi') that should not appear in the
+        corresponding header.
+        
+        Finally, if overwrite is set to True,
+        then the output cubes will be replaced if they exist,
+        otherwise an error is thrown.
+
+        """
+        if len(gauprops) == 0:
+            return
+        if len(gauprops) != len(outcubi):
+            return
+
+        for i in range(len(gauprops)):
+            if naxis == 4:
+                newar = np.zeros((1, gauprops[i].shape[0], naxis2, naxis1), dtype = '>f4')
+            elif naxis == 3 or gauprops[i].shape[0] != 1:
+                naxis = 3
+                newar = np.zeros((gauprops[i].shape[0], naxis2, naxis1), dtype = '>f4')
+            elif naxis == 2:
+                newar = np.zeros((naxis2, naxis1), dtype = '>f4')
+
+            newar[newar.shape[0]//2,newar.shape[1]//2,:] = 1.
+
+            # Create a hdulist
+            hdu = fits.HDUList([fits.PrimaryHDU(newar)])
+            target = hdu[0].data.astype('float'+'{:d}'.format(hdu[0].data.itemsize*8))
+            hdu[0].header['BSCALE'] = 1
+            hdu[0].header['BZERO'] = 0
+            hdu[0].header['BUNIT'] = 'JY/BEAM'
+            hdu[0].header['BTYPE'] = 'intensity'
+            hdu[0].header['CRPIX1'] = naxis1//2+1
+            hdu[0].header['CDELT1'] = -pixelsize
+            hdu[0].header['CRVAL1'] = 60.
+            hdu[0].header['CTYPE1'] = 'RA---SIN'
+            hdu[0].header['CRPIX2'] = naxis1//2+1
+            hdu[0].header['CDELT2'] = pixelsize
+            hdu[0].header['CRVAL2'] = -30.
+            hdu[0].header['CTYPE2'] = 'DEC--SIN'
+            hdu[0].header['OBJECT'] = 'p{:3d}'.format(i)
+            hdu[0].header['EPOCH'] = '2000'
+            hdu[0].header['EQUINOX'] = 'J2000'
+            hdu[0].header['ORIGIN'] = 'beach'
+            if naxis > 2:
+                hdu[0].header['CRPIX3'] = 1
+                hdu[0].header['CDELT3'] = channelwidth
+            if 'FREQ' in ctype3:
+                if type(restfreq) != type(None):
+                    hdu[0].header['CRVAL3'] = restfreq
+                else:
+                    hdu[0].header['CRVAL3'] = HIFREQ                    
+            hdu[0].header['CTYPE3'] = ctype3
+            if naxis > 3:
+                hdu[0].header['CRPIX4'] = 1
+                hdu[0].header['CDELT4'] = 1
+                hdu[0].header['CRVAL4'] = 1
+                hdu[0].header['CTYPE4'] = 'STOKES'
+            if type(cellscal) != type(None):
+                if cellscal == 'constant':
+                    hdu[0].header['CELLSCAL'] = 'CONSTANT'
+                else:
+                    hdu[0].header['CELLSCAL'] = '1/F'
+            if type(restfreq) != type(None):
+                hdu[0].header['RESTFREQ'] = restfreq
+            if type(bmaj) != type(None):
+                hdu[0].header['BMAJ'] = bmaj
+            if type(bmaj) != type(None):
+                hdu[0].header['BMIN'] = bmin
+            if type(bpa) != type(None):
+                hdu[0].header['BPA'] = bpa
+
+            # Generate Gaussians and put their properties in header
+            for j in range(gauprops[i].shape[0]):
+                    darray = self._gaussian_2dp( naxis1 = naxis1,
+                                                 naxis2 = naxis2, cdelt1 =
+                                                 1., cdelt2 = 1.,
+                                                 amplitude_maj_a =
+                                                 gauprops[i][j,2],
+                                                 dispersion_maj_a =
+                                                 gauprops[i][j,3]/np.sqrt(np.log(256.)),
+                                                 signum_maj_a = -1,
+                                                 amplitude_min_a = 1.,
+                                                 dispersion_min_a =
+                                                 gauprops[i][j,4]/np.sqrt(np.log(256.)),
+                                                 signum_min_a = -1, pa_a =
+                                                 np.pi*gauprops[i][j,5]/180.,
+                                                 dtype = target.dtype,
+                                                 centering =
+                                                 [gauprops[i][j,0],gauprops[i][j,1]],
+                                                 forreal = False).astype(hdu[0].data.dtype)
+                    if naxis == 2:
+                        hdu[0].data[:] = darray.astype(hdu[0].data.dtype)
+                    if naxis == 3:
+                        hdu[0].data[j,:] = darray.astype(hdu[0].data.dtype)
+                    if naxis == 4:
+                        hdu[0].data[0,j,:] = darray.astype(hdu[0].data.dtype)
+                        
+
+                    if naxis > 2:
+                        hdu[0].header['BMAJ{:d}'.format(j+1)] = gauprops[i][j,3]*pixelsize
+                        hdu[0].header['BMIN{:d}'.format(j+1)] = gauprops[i][j,4]*pixelsize
+                        hdu[0].header['BPA{:d}'.format(j+1)] = gauprops[i][j,5]
+                    else:
+                        hdu[0].header['BMAJ'] = gauprops[i][j,3]*pixelsize
+                        hdu[0].header['BMIN'] = gauprops[i][j,4]*pixelsize
+                        hdu[0].header['BPA'] = gauprops[i][j,5]
+                        
+            
+            hdu.writeto(outcubi[i], overwrite = overwrite)
+
        
 def printcubeinfo(cubename):
     print('Header info ',cubename)
@@ -3024,19 +3508,22 @@ def printbeachconts(beach):
     print('dx  : ', beach.binfo_input[1][:,4])
     print()
     print('Pixel cube 1')
-    print('bmaj    : ', beach.binfo_pixel[0][:,0])
-    print('bmin    : ', beach.binfo_pixel[0][:,1])
-    print('cos bpa : ', beach.binfo_pixel[0][:,2])
-    print('sin bpa : ', beach.binfo_pixel[0][:,3])
-    print('freq    : ', beach.binfo_pixel[0][:,4])
+    print('bmaj      : ', beach.binfo_pixel[0][:,0])
+    print('bmin      : ', beach.binfo_pixel[0][:,1])
+    print('bpa       : ', beach.binfo_pixel[0][:,2])
+    print('freq      : ', beach.binfo_pixel[0][:,3])
+    print('dx        : ', beach.binfo_pixel[0][:,4])
+    print('rfreq/freq: ', beach.binfo_pixel[0][:,5])
     print('Pixel cube 2')
-    print('bmaj    : ', beach.binfo_pixel[1][:,0])
-    print('bmin    : ', beach.binfo_pixel[1][:,1])
-    print('cos bpa : ', beach.binfo_pixel[1][:,2])
-    print('sin bpa : ', beach.binfo_pixel[1][:,3])
-    print('freq    : ', beach.binfo_pixel[1][:,4])
+    print('bmaj      : ', beach.binfo_pixel[1][:,0])
+    print('bmin      : ', beach.binfo_pixel[1][:,1])
+    print('bpa       : ', beach.binfo_pixel[1][:,2])
+    print('freq      : ', beach.binfo_pixel[1][:,3])
+    print('dx        : ', beach.binfo_pixel[1][:,4])
+    print('rfreq/freq: ', beach.binfo_pixel[1][:,5])
     print()
     print(beach._binfo_target)
+
 
 
 if __name__ == '__main__':
@@ -3113,5 +3600,35 @@ if __name__ == '__main__':
     beach.genbstats()
     beach.gentarget()
     printbeachconts(beach)
+    beach.convoltests()
 
-    beach.convoltests2(incubus = 'p2_07.fits', targetname = 'target.fits', outgaussian_center = 'outgaussian_c.fits', outgaussian_origin = 'outgaussian_o.fits', outgaussian_fftconv = 'outgaussian_fftconv.fits', outgaussian_rfftconv = 'outgaussian_rfftconv.fits', outgaussian_convcalc = 'outgaussian_convcalc.fits', outgaussian_rconvcalc = 'outgaussian_rconvcalc.fits', puregaussian = 'puregaussian.fits', outgaussian_rshapechange = 'outgaussian_rshapechange.fits')
+    # Create two cubes with 4 planes each
+    outcubi = ['testcube1.fits', 'testcube2.fits']
+    naxis1 = 257
+    naxis2 = 513
+    naxis3 = 4
+
+    # The Gaussian properties increase by one per plane and the
+    # position angle by 5 per plane
+    amp0 = 1.
+    ainc = 0.1
+    pinc = 5
+    bmaj0 = 10. 
+    bmin0 = 7.
+    binc = 1.
+    bpa0 = 30
+    cinc = 7
+    
+    gauprops = []
+    for i in range(len(outcubi)):
+        planar = np.zeros((naxis3,6))
+        for j in range(naxis3):
+            planar[j, 0] = naxis1//2+(i*naxis3+j)*pinc
+            planar[j, 1] = naxis2//2+(i*naxis3+j)*pinc
+            planar[j, 2] = amp0+(i*naxis3+j)*ainc
+            planar[j, 3] = bmaj0+(i*naxis3+j)*binc
+            planar[j, 4] = bmin0+(i*naxis3+j)*binc
+            planar[j, 5] = bmin0+(i*naxis3+j)*cinc
+        gauprops.append(planar)
+        
+    beach.createstcubes(gauprops = gauprops, outcubi = outcubi, naxis1 = naxis1, naxis2 = naxis2)
