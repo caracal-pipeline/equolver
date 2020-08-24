@@ -9,11 +9,10 @@ except ImportError as e:
 
 requirements = [
     'numpy',
+    'scipy',
     'astropy',
-#    'numpy>=1.14',
-#    'python-casacore',
-#    'scipy',
-#    'astropy',
+    'radio_beam',
+    'pyfftw'
 ]
 
 PACKAGE_NAME = 'equolver'
@@ -21,7 +20,7 @@ __version__ = '0.0.0'
 
 setup(name=PACKAGE_NAME,
       version=__version__,
-      description="Development Status :: 5 - Production/Stable",
+      description="Development Status :: 3 - Alpha",
       author="Gyula Jozsa",
       author_email="gigjozsast@gmail.com",
       url="https://github.com/gigjozsa/equolver",
@@ -33,7 +32,7 @@ setup(name=PACKAGE_NAME,
       #scripts=["bin/" + j for j in os.listdir("bin")],
       license=["GNU GPL v3"],
       classifiers=[
-          "Development Status :: 5 - Production/Stable",
+          "Development Status :: 3 - Alpha",
           "Intended Audience :: Science/Research",
           "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
           "Operating System :: POSIX :: Linux",
