@@ -2509,12 +2509,15 @@ class Beach:
             #incubus_image = incubus_image.reshape((incubus[0].header['NAXIS1'],
             #                             incubus[0].header['NAXIS2'],
             #                             len(self._binfo_input[i][:,0])))
-            incubus_image = np.squeeze(incubus_image)
-            
+            if incubus_image.ndim > 3:
+                incubus_image = np.squeeze(incubus_image)
+            if incubus_image.ndim == 2:
+                incubus_image = incubus_image.reshape((1, incubus_image.shape[0], incubus_image.shape[1]))
             # Make a copy
             outcubus_image = incubus_image.copy()*0.+np.nan
             
             for plane in range(incubus_image.shape[0]):
+                print('Processing {:s} plane {:d}'.format(cuben[i],plane))
                 originbeam = self._binfo_pixel[i][plane,:]
                 targetbeam = self._binfo_target[i][plane,:]
                 originplane = incubus_image[plane,:,:]
