@@ -29,19 +29,23 @@ class Beach:
                        restfreq = HIFREQ, restfreq_replace = False,
                        normfreq = 1E9,
                        parameter = 'all',
-                       stype = ['average', 'stdev', 'maximum', 'commonbeam'], sample = 'all', percents = 90,
+                       scaling = 'frequency',
+                       stype = ['stdev', 'commonbeam'],
+                       sample = 'all', percents = 90,
                        tolerance = 0.1, nsamps = 200, epsilon = 0.0005,
-                       tar_bmaj_inter = ['bmaj', 'commonbeam', 'total'],
-                       tar_bmaj_slope = ['bmaj', 'stdev', 'total'],
+                       tar_bmaj_inter = ['bmaj', 'frequency', 'commonbeam', 'total'],
+                       tar_bmaj_slope = ['bmaj', 'frequency',  'stdev', 'total'],
                        tar_bmaj_absc = 0.0,
-                       tar_bmin_inter = ['bmin', 'commonbeam', 'total'],
-                       tar_bmin_slope = ['bmin', 'stdev', 'total'],
+                       tar_bmin_inter = ['bmin', 'frequency',  'commonbeam', 'total'],
+                       tar_bmin_slope = ['bmin', 'frequency',  'stdev', 'total'],
                        tar_bmin_absc = 0.0,
-                       tar_bpa_inter =  ['bpa', 'commonbeam', 'total'],
-                       tar_bpa_slope =  ['bpa', 'stdev', 'total'],
+                       tar_bpa_inter =  ['bpa', 'frequency',  'commonbeam', 'total'],
+                       tar_bpa_slope =  ['bpa', 'frequency',  'stdev', 'total'],
                        tar_bpa_absc =  0.0,
-                       tar_scaling = 'const', genbstats_exe = True, gentarget_exe = True,
-                       gentrans_exe = True, tra_fitsnames = None, tra_overwrite = False, 
+                       tar_scaling = 'frequency', genbstats_exe = True,
+                       gentarget_exe = True,
+                       gentrans_exe = True, tra_fitsnames = None,
+                       tra_overwrite = False, 
                        tra_commonbeam = True, tra_indibeam = True,
                        threads = 1, verb = False):
         """Private instance variables:
@@ -98,7 +102,7 @@ class Beach:
         self.genbinfo(verb = self._verb)
         self._normfreq = copy.deepcopy(normfreq)
 
-        for para in ['parameter', 'stype', 'sample',
+        for para in ['parameter', 'scaling', 'stype', 'sample',
                      'percents', 'tolerance', 'nsamps', 'epsilon',
                      'gentarget_exe']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
@@ -432,6 +436,30 @@ class Beach:
         return
 
     @property
+    def scaling(self):
+        """
+        Return a copy of parameter
+        """
+        return copy.deepcopy(self._scaling)
+
+    @scaling.setter
+    def scaling(self, value):
+        """
+        Set scaling
+        """
+        self._scaling = copy.deepcopy(value)
+        if self_genbstats_exe:
+            self.genbstats(verb = False)
+        return
+
+    @scaling.deleter
+    def parameter(self, value):
+        self._scaling = 'frequency'
+        self._bstats = None
+        self._binfo_target = None
+        return
+
+    @property
     def stype(self):
         """
         Return a copy of stype
@@ -594,7 +622,7 @@ class Beach:
 
     @tar_bmaj_inter.deleter
     def tar_bmaj_inter(self, value):
-        self._tar_bmaj_inter = ['bmaj', 'freq', 'median', 'all']
+        self._tar_bmaj_inter = ['bmaj', 'frequency', 'median', 'all']
         self._binfo_target = None
         return
 
@@ -617,7 +645,7 @@ class Beach:
 
     @tar_bmaj_slope.deleter
     def tar_bmaj_slope(self, value):
-        self._tar_bmaj_slope = ['bmaj', 'freq', 'madstdev', 'all']
+        self._tar_bmaj_slope = ['bmaj', 'frequency', 'madstdev', 'all']
         self._binfo_target = None
         return
 
@@ -663,7 +691,7 @@ class Beach:
 
     @tar_bmin_inter.deleter
     def tar_bmin_inter(self, value):
-        self._tar_bmin_inter = ['bmaj', 'freq', 'median', 'all']
+        self._tar_bmin_inter = ['bmaj', 'frequency', 'median', 'all']
         self._binfo_target = None
         return
 
@@ -686,7 +714,7 @@ class Beach:
 
     @tar_bmin_slope.deleter
     def tar_bmin_slope(self, value):
-        self._tar_bmin_slope = ['bmaj', 'freq', 'madstdev', 'all']
+        self._tar_bmin_slope = ['bmaj', 'frequency', 'madstdev', 'all']
         self._binfo_target = None
         return
 
@@ -732,7 +760,7 @@ class Beach:
 
     @tar_bpa_inter.deleter
     def tar_bpa_inter(self, value):
-        self._tar_bpa_inter = ['bpa', 'freq', 'median', 'all']
+        self._tar_bpa_inter = ['bpa', 'frequency', 'median', 'all']
         self._binfo_target = None
         return
 
@@ -755,7 +783,7 @@ class Beach:
 
     @tar_bpa_slope.deleter
     def tar_bpa_slope(self, value):
-        self._tar_bpa_slope = ['bpa', 'freq', 'madstdev', 'all']
+        self._tar_bpa_slope = ['bpa', 'frequency', 'madstdev', 'all']
         self._binfo_target = None
         return
 
@@ -801,7 +829,7 @@ class Beach:
 
     @tar_scaling.deleter
     def tar_scaling(self, value):
-        self._tar_scaling = 'freq'
+        self._tar_scaling = 'frequency'
         self._binfo_target = None
         return
 
@@ -1153,7 +1181,7 @@ class Beach:
                 naxis3 = 1
         
 
-            self._binfo_input.append(np.empty((naxis3,6,)))
+            self._binfo_input.append(np.empty((naxis3,8,)))
             self._binfo_input[-1][:] = np.nan
         return
 
@@ -1282,7 +1310,8 @@ class Beach:
             
     def _initbinfo_inputvar(self, bmaj = None, bmaj_replace = None, bmin = None,
                     bmin_replace = None, bpa = None, bpa_replace = None,
-                            restfreq = None, restfreq_replace = None, verb = False):
+                            restfreq = None, restfreq_replace = None,
+                            normfreq = None, verb = False):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -1303,7 +1332,7 @@ class Beach:
                        bmin = None, bmin_replace = None,
                        bpa = None,  bpa_replace = None,
                        restfreq = HIFREQ, restfreq_replace = None,
-                       verb = True):
+                       normfreq = None, verb = True):
         """
         Fill beam properties into info table
         
@@ -1333,7 +1362,8 @@ class Beach:
                                         bpa_replace = bpa_replace,
                                         restfreq = restfreq,
                                         restfreq_replace =
-                                        restfreq_replace, verb = verb)
+                                        restfreq_replace,
+                                        normfreq = normfreq, verb = verb)
 
         if stop:
             if self._verb:
@@ -1353,6 +1383,16 @@ class Beach:
                 warning('binfo_input not present. Use initheaders first.')
             return
         
+        # Do not try to regenerate, if this is none, it has deliberately been
+        # set to None, as __init__ has a default of 1E9
+        if type(self._normfreq) == type(None):
+            if verb or self._verb:
+                warnings.warn('No normalization frequency read in, which '+ \
+                              'disables further processing.')
+            return
+
+        normfreq = self._getdefault(self._normfreq)
+
         # Get defaults
         bmaj = self._getdefault(self._bmaj)
         bmin = self._getdefault(self._bmin)
@@ -1467,6 +1507,15 @@ class Beach:
                 'BPA', self._headers[i], value = bpa[i],
                 usevalue = bpa_replace, usedefault = True)
 
+            if np.isnan(self._binfo_input[i][:,3].sum()):
+                thafreq = normfreq[i]
+            else:
+                thafreq = self._binfo_input[i][:,3]
+            self._binfo_input[i][:,6] = self._binfo_input[i][:,0]*\
+                thafreq/normfreq[i]
+            self._binfo_input[i][:,7] = self._binfo_input[i][:,1]*\
+                thafreq/normfreq[i]
+            
         self._genbinfo_pixel(verb = verb)
 
         if self._genbstats_exe:
@@ -1655,6 +1704,9 @@ class Beach:
             # Scale to rad
             boutfarray[:,2] = np.pi*binfarray[:,2]/180.
             
+            boutfarray[:,6] = binfarray[:,6]/binfarray[:,4]/np.sqrt(np.log(256))
+            boutfarray[:,7] = binfarray[:,7]/binfarray[:,4]/np.sqrt(np.log(256))
+
             self._binfo_pixel.append(boutfarray)
         return
         
@@ -1700,28 +1752,28 @@ class Beach:
             self._bstats[key0] = {}
             
             # scaling
-            #for key1 in ['input', 'freq']:
-            #    self._bstats[key0][key1] = {}
-
-            # stype
-            for key1 in ['minimum', 'maximum', 'average', 'stdev', 'median',
-                         'mad', 'madstdev', 'percentile', 'percents',
-                         'commonbeam']:
+            for key1 in ['constant', 'frequency']:
                 self._bstats[key0][key1] = {}
-                # for key4 in ['cube', 'chan', 'tota']:
 
-                # sample
-                self._bstats[key0][key1]['total'] = np.nan
-                self._bstats[key0][key1]['chan'] = \
-                    np.empty((channels,))
-                self._bstats[key0][key1]['chan'][:] = np.nan
-                self._bstats[key0][key1]['cube'] = []
-                for i in range(ncubes):
-                    self._bstats[key0][key1]['cube'].append(np.nan)
+                # stype
+                for key2 in ['minimum', 'maximum', 'average', 'stdev', 'median',
+                             'mad', 'madstdev', 'percentile', 'percents',
+                             'commonbeam']:
+                    self._bstats[key0][key1][key2] = {}
+                    # for key4 in ['cube', 'chan', 'tota']:
+
+                    # sample
+                    self._bstats[key0][key1][key2]['total'] = np.nan
+                    self._bstats[key0][key1][key2]['chan'] = \
+                        np.empty((channels,))
+                    self._bstats[key0][key1][key2]['chan'][:] = np.nan
+                    self._bstats[key0][key1][key2]['cube'] = []
+                    for i in range(ncubes):
+                        self._bstats[key0][key1][key2]['cube'].append(np.nan)
                         
         return
     
-    def _initbstatsvar(self, parameter = None, stype = None,
+    def _initbstatsvar(self, parameter = None, stype = None, scaling = None,
                        sample = None, percents = None, tolerance = None,
                        nsamps = None, epsilon = None, verb = False):
         """
@@ -1740,15 +1792,16 @@ class Beach:
                     output = True
         return output
             
-    def genbstats(self, parameter = None, stype = None, sample = None,
-                  percents = None, tolerance = None, nsamps = None,
-                  epsilon = None, verb = True):
-        """
-        Generate statistics and dump it into the bstats structure
+    def genbstats(self, parameter = None, scaling = None, stype = None,
+                  sample = None, percents = None, tolerance = None,
+                  nsamps = None, epsilon = None, verb = True):
+        """Generate statistics and dump it into the bstats structure
         
         Input:
         parameter (str or list of str): Parameter name ('bmaj', 
                                         'bmin', 'bpa')
+        scaling (str or list of str)    : Scaling type ('constant', 
+                                        'frequency')
         stype (str or list of str)    : Type of statistics to
                                         calculate ('minimum',
                                         'maximum', 'average',
@@ -1769,9 +1822,11 @@ class Beach:
         properties. The parameters parameter, scaling, sample, and
         type determine which part of the bstats structure gets
         filled. If for any of the parameters 'all' is chosen (which is
-        the default), all fields are filled. The scaling type
-        corresponds to the tables/structures binfo_input and
-        binfo_pixel generated using methods genbinfo, _genbinfo_pixel.
+        the default), all fields are filled. If the scaling type is
+        'constant', the given values for bmaj and bmin are evaluated,
+        if 'frequency' is chosen, all beam sizes are scaled to the
+        same norm-frequency nf, assuming that the beam sizes scale
+        with 1/frequency. b(nf) = b(f)*f/nf .
 
         From top to bottom level:
 
@@ -1779,7 +1834,9 @@ class Beach:
             major axis dispersions/hpbws ('bmaj')
             minor axis dispersions/hpbws ('bmin')
             beam position angles ('bpa')
-
+        scaling:
+            constant ('const')
+            frequency ('frequency')
         stype:
             Minimum ('minimum')
             Maximum ('maximum')
@@ -1812,11 +1869,12 @@ class Beach:
 
         """
 
-        stop = self._initbstatsvar(parameter = parameter,
-                                stype = stype, sample = sample,
-                                percents = percents, tolerance = tolerance,
-                                nsamps = nsamps, epsilon = epsilon,
-                                verb = verb)
+        stop = self._initbstatsvar(parameter = parameter, scaling =
+                                   scaling, stype = stype, sample =
+                                   sample, percents = percents,
+                                   tolerance = tolerance, nsamps =
+                                   nsamps, epsilon = epsilon, verb =
+                                   verb)
 
         if stop:
             if self._verb:
@@ -1834,12 +1892,15 @@ class Beach:
             return
         
         para = copy.deepcopy(self._parameter)
+        scal = copy.deepcopy(self._scaling)
         styp = copy.deepcopy(self._stype)
         samp = copy.deepcopy(self._sample)
 
         # Expand all parameters to the same format
         if type(para) == type(''):
             para = [para]
+        if type(scal) == type(''):
+            scal = [scal]
         if type(styp) == type(''):
             styp = [styp]
         if type(samp) == type(''):
@@ -1852,6 +1913,8 @@ class Beach:
 
         if 'all' in para:
             para = ['bmaj', 'bmin', 'bpa']
+        if 'all' in scal:
+            scal = ['constant', 'frequency']
         if 'all' in styp:
             styp = ['minimum', 'maximum', 'average', 'stdev', 'median',
                     'mad', 'madstdev', 'percentile', 'percents',
@@ -1879,61 +1942,76 @@ class Beach:
 
         # get struct
         #struct = self._binfo_input
+        print('scal', scal)
+        for sca in scal:
+            
+            for sam in samp:
 
-        for sam in samp:
+                # collect sample as list of np arrays
+                collist = []
 
-            # collect sample as list of np arrays
-            collist = []
+                #print(sam)
 
-            #print(sam)
-
-            if sam == 'cube':
-                for i in self._binfo_input:
-                    collist.append(i[:,[0,1,2]])
-            elif sam == 'chan':
-                for i in range(self._bstats['bmaj']['maximum'][sam].shape[0]):
-                    collist.append(np.empty((0,3,), dtype=np.float64))
-                    for j in self._binfo_input:
-                        if j.shape[0] > i:
-                            collist[i] = np.append(collist[i],
-                                                   j[i:i+1,[0,1,2]],
+                if sam == 'cube':
+                    for i in self._binfo_input:
+                        if sca == 'constant':
+                            collist.append(i[:,[0,1,2]])
+                        else:
+                            collist.append(i[:,[6,7,2]])
+                            
+                elif sam == 'chan':
+                    for i in range(self._bstats['bmaj']['constant']['maximum'][sam].shape[0]):
+                        collist.append(np.empty((0,3,), dtype=np.float64))
+                        for j in self._binfo_input:
+                            if j.shape[0] > i:
+                                if sca == 'constant':
+                                    collist[i] = np.append(collist[i],
+                                                       j[i:i+1,[0,1,2]],
+                                                       axis = 0)
+                                else:
+                                    collist[i] = np.append(collist[i],
+                                                       j[i:i+1,[6,7,2]],
+                                                       axis = 0)
+                elif sam == 'total':
+                    collist = [np.empty((0,3,))]
+                    for i in self._binfo_input:
+                        if sca == 'constant':
+                            collist[0] = np.append(collist[0], i[:,[0,1,2]],
                                                    axis = 0)
-            elif sam == 'total':
-                collist = [np.empty((0,3,))]
-                for i in self._binfo_input:
-                    collist[0] = np.append(collist[0], i[:,[0,1,2]],
-                                           axis = 0)
-            else:
-                if verb or self._verb:
-                    warnings.warn('Statistics cannot be generated.'+ \
-                                  'Check sample parameter. Returning.')
-            #print('collist', collist)
+                        else:
+                            collist[0] = np.append(collist[0], i[:,[6,7,2]],
+                                                   axis = 0)
+                else:
+                    if verb or self._verb:
+                        warnings.warn('Statistics cannot be generated.'+ \
+                                      'Check sample parameter. Returning.')
+                #print('collist', collist)
 
-            #stackedcahn = 1
-            #if collist[0].shape[0] > stackedcahn:
-            #    print(collist[0],collist[0][stackedcahn,2])
-            #print('yo\n')
-            for sty in styp:
-                met = getattr(self, '_gen'+sty)
+                #stackedcahn = 1
+                #if collist[0].shape[0] > stackedcahn:
+                #    print(collist[0],collist[0][stackedcahn,2])
+                #print('yo\n')
+                for sty in styp:
+                    met = getattr(self, '_gen'+sty)
 
-                # Apply statistics
-                kwargs = {
-                    'percents' : self._percents,
-                    'tolerance': self._tolerance,
-                    'nsamps'   : self._nsamps,
-                    'epsilon'  : self._epsilon
-                    }
-                stats = met(collist, **kwargs)
-                #print('stats ', stats)
+                    # Apply statistics
+                    kwargs = {
+                        'percents' : self._percents,
+                        'tolerance': self._tolerance,
+                        'nsamps'   : self._nsamps,
+                        'epsilon'  : self._epsilon
+                        }
+                    stats = met(collist, **kwargs)
+                    #print('stats ', stats)
 
-                # Get function to generate statistics
-                for par in para:
+                    # Get function to generate statistics
+                    for par in para:
 
-                    #print('par', par, 'parma', parma[par])
+                        #print('par', par, 'parma', parma[par])
 
-                    # Put the right value into array
-                    self._bstats[par][sty][sam] = stats[:,parma[par]]
-                    #print('self._bstats[', par, '][', sty, '][', sam,'] =', self._bstats[par][sca][sty][sam])
+                        # Put the right value into array
+                        self._bstats[par][sca][sty][sam] = stats[:,parma[par]]
+                        #print('self._bstats[', par, '][', sty, '][', sam,'] =', self._bstats[par][sca][sty][sam])
 
         # Cascade down
         if self._gentarget_exe:
@@ -2200,7 +2278,7 @@ class Beach:
 
         # First check which type of input this is
         if type(item) == type([]):
-            if len(item) == 3:
+            if len(item) == 4:
                 
                 # The alternative is either numeric or quantity,
                 # so this is sufficient for identifying the input
@@ -2208,15 +2286,15 @@ class Beach:
                     # print(self._bstats)
                     # Ensure that we can actually do this
                     if type(self._bstats) == type(None) or \
-                       self._bstats[item[0]][item[1]][item[2]] \
+                       self._bstats[item[0]][item[1]][item[2]][item[3]] \
                        == np.nan:
                         if verb or self._verb:
                             warnings.warn('Attempting to genereate part of '+ \
                                           'beam statistics struct.')
-                        self.genbstats(parameter = item[0], stype =
-                                       item[1], sample = item[2], verb = verb)
+                        self.genbstats(parameter = item[0], scaling = item[1], stype =
+                                       item[2], sample = item[3], verb = verb)
                     if type(self._bstats) == type(None) or \
-                       self._bstats[item[0]][item[1]][item[2]] \
+                       self._bstats[item[0]][item[1]][item[2]][item[3]] \
                        == np.nan:
                         if verb or self._verb:
                             warnings.warn('Failed to genereate beam statistics'+ \
@@ -2229,12 +2307,12 @@ class Beach:
                     for i in range(len(self._headers)):
                         output.append(np.zeros(self._binfo_input[i].shape[0]))
 
-                        if item[2] == 'cube':
+                        if item[3] == 'cube':
                             output[i] = output[i]+\
-                                self._bstats[item[0]][item[1]][item[2]][i]
-                        elif item[2] == 'channel' or item[2] == 'total':
+                                self._bstats[item[0]][item[1]][item[2]][item[3]][i]
+                        elif item[3] == 'channel' or item[3] == 'total':
                             output[i] = output[i]+\
-                                self._bstats[item[0]][item[1]][item[2]]
+                                self._bstats[item[0]][item[1]][item[2]][item[3]]
                         else:
                             raise BaseException('Argument must be \'cube\', ',
                                                 '\'channel\', or \'total\.')
@@ -2288,7 +2366,7 @@ class Beach:
         tar_bpa_slope  (multiple): Beam position angle axis slope    
         tar_bpa_absc   (multiple): Beam position angle abscissae
         tar_scaling    (multiple): Use 1/F scaling when calculating
-                               the target array, either 'freq' or
+                               the target array, either 'frequency' or
                                'input'
 
         The method first generates a struct binfo_target of the same
@@ -2377,14 +2455,20 @@ class Beach:
         tar_bpa_absc   = self._getar(self._tar_bpa_absc)
 
         # For the preliminary output we make a copy of input
-        targar = copy.deepcopy(self._binfo_input)
+        targar = copy.deepcopy(self._binfo_pixel)
 
         for i in range(len(targar)):
 
             # Notice that this is the inverse operation to translating
             # the input beams to frequency scaling
-            if self._tar_scaling == 'freq':
-                scale = targar[i][:,3]/normfreq[i]
+            if np.isnan(self._binfo_input[i][:,3].sum()):
+                thafreq = normfreq[i]
+            else:
+                thafreq = targar[i][:,3]
+
+            print('tar_scaling', self._tar_scaling)
+            if self._tar_scaling == 'frequency':
+                scale = normfreq[i]/thafreq
             else:
                 scale = np.ones(targar[i].shape[0])
 
@@ -2411,12 +2495,6 @@ class Beach:
 
             # Converting to rad
             targar[i][:,2] = np.pi*targar[i][:,2]/180.
-
-            # Calculating sin
-            #targar[i][:,3] = np.sin(targar[i][:,2])
-
-            # Calculating cos
-            #targar[i][:,4] = np.cos(targar[i][:,2])
 
         self._binfo_target = targar
 
@@ -2528,9 +2606,8 @@ class Beach:
             # Replace incubus with outcubus and write out
             incubus[0].data[:] = outcubus_image.astype(incubus[0].data.dtype)
 
-            # Here we are missing the bit to update the header info
             if self._tra_commonbeam:
-                if self._tar_scaling == 'freq':
+                if self._tar_scaling == 'frequency':
 
                     # For each cube calculate the average beam
                     # normalised to the reference frequency dscal is
@@ -3318,6 +3395,7 @@ class Beach:
         naxis1 (int)                  : Size of cubes axis 1
         naxis2 (int)                  : Size of cubes axis 2
         pixelsize (float)             : Spacial pixel size in deg
+        ctype3 (string)               : Type of third axis ('VRAD', 'FREQ')
         channelwidth (float)          : Channel width in m/s
         cellscal (None type or str)   : CELLSCAL, if None, no CELLSCAL
         restfreq (None type or float) : Rest frequency
@@ -3390,7 +3468,10 @@ class Beach:
             elif naxis == 2:
                 newar = np.zeros((naxis2, naxis1), dtype = '>f4')
 
-            newar[newar.shape[0]//2,newar.shape[1]//2,:] = 1.
+            if naxis > 2:
+                newar[newar.shape[0]//2,newar.shape[1]//2] = 1.
+            else:
+                newar[newar.shape[0]//2,newar.shape[1]//2] = 1.
 
             # Create a hdulist
             hdu = fits.HDUList([fits.PrimaryHDU(newar)])
@@ -3441,39 +3522,41 @@ class Beach:
 
             # Generate Gaussians and put their properties in header
             for j in range(gauprops[i].shape[0]):
-                    darray = self._gaussian_2dp( naxis1 = naxis1,
-                                                 naxis2 = naxis2, cdelt1 =
-                                                 1., cdelt2 = 1.,
-                                                 amplitude_maj_a =
-                                                 gauprops[i][j,2],
-                                                 dispersion_maj_a =
-                                                 gauprops[i][j,3]/np.sqrt(np.log(256.)),
-                                                 signum_maj_a = -1,
-                                                 amplitude_min_a = 1.,
-                                                 dispersion_min_a =
-                                                 gauprops[i][j,4]/np.sqrt(np.log(256.)),
-                                                 signum_min_a = -1, pa_a =
-                                                 np.pi*gauprops[i][j,5]/180.,
-                                                 dtype = target.dtype,
-                                                 centering =
-                                                 [gauprops[i][j,0],gauprops[i][j,1]],
-                                                 forreal = False).astype(hdu[0].data.dtype)
-                    if naxis == 2:
-                        hdu[0].data[:] = darray.astype(hdu[0].data.dtype)
-                    if naxis == 3:
-                        hdu[0].data[j,:] = darray.astype(hdu[0].data.dtype)
-                    if naxis == 4:
-                        hdu[0].data[0,j,:] = darray.astype(hdu[0].data.dtype)
-                        
+                print('j',j)
+                print(i,gauprops[i])
+                darray = self._gaussian_2dp( naxis1 = naxis1,
+                                             naxis2 = naxis2, cdelt1 =
+                                             1., cdelt2 = 1.,
+                                             amplitude_maj_a =
+                                             gauprops[i][j,2],
+                                             dispersion_maj_a =
+                                             gauprops[i][j,3]/np.sqrt(np.log(256.)),
+                                             signum_maj_a = -1,
+                                             amplitude_min_a = 1.,
+                                             dispersion_min_a =
+                                             gauprops[i][j,4]/np.sqrt(np.log(256.)),
+                                             signum_min_a = -1, pa_a =
+                                             np.pi*gauprops[i][j,5]/180.,
+                                             dtype = target.dtype,
+                                             centering =
+                                             [gauprops[i][j,0],gauprops[i][j,1]],
+                                             forreal = False).astype(hdu[0].data.dtype)
+                if naxis == 2:
+                    hdu[0].data[:] = darray.astype(hdu[0].data.dtype)
+                if naxis == 3:
+                    hdu[0].data[j,:] = darray.astype(hdu[0].data.dtype)
+                if naxis == 4:
+                    hdu[0].data[0,j,:] = darray.astype(hdu[0].data.dtype)
 
-                    if naxis > 2:
-                        hdu[0].header['BMAJ{:d}'.format(j+1)] = gauprops[i][j,3]*pixelsize
-                        hdu[0].header['BMIN{:d}'.format(j+1)] = gauprops[i][j,4]*pixelsize
-                        hdu[0].header['BPA{:d}'.format(j+1)] = gauprops[i][j,5]
-                    else:
-                        hdu[0].header['BMAJ'] = gauprops[i][j,3]*pixelsize
-                        hdu[0].header['BMIN'] = gauprops[i][j,4]*pixelsize
-                        hdu[0].header['BPA'] = gauprops[i][j,5]
+
+                if naxis > 2:
+                    hdu[0].header['BMAJ{:d}'.format(j+1)] = gauprops[i][j,3]*pixelsize
+                    hdu[0].header['BMIN{:d}'.format(j+1)] = gauprops[i][j,4]*pixelsize
+                    hdu[0].header['BPA{:d}'.format(j+1)] = gauprops[i][j,5]
+                else:
+                    hdu[0].header['BMAJ'] = gauprops[i][j,3]*pixelsize
+                    hdu[0].header['BMIN'] = gauprops[i][j,4]*pixelsize
+                    hdu[0].header['BPA'] = gauprops[i][j,5]
                         
             
             hdu.writeto(outcubi[i], overwrite = overwrite)
@@ -3512,6 +3595,8 @@ def printbeachconts(beach):
     print('freq      : ', beach.binfo_input[0][:,3])
     print('dx        : ', beach.binfo_input[0][:,4])
     print('rfreq/freq: ', beach.binfo_input[0][:,5])
+    print('bmaj*freq : ', beach.binfo_input[0][:,6])
+    print('bmin*freq : ', beach.binfo_input[0][:,7])
     print('Input cube 2')
     print('bmaj      : ', beach.binfo_input[1][:,0])
     print('bmin      : ', beach.binfo_input[1][:,1])
@@ -3519,6 +3604,8 @@ def printbeachconts(beach):
     print('freq      : ', beach.binfo_input[1][:,3])
     print('dx        : ', beach.binfo_input[1][:,4])
     print('rfreq/freq: ', beach.binfo_input[1][:,5])
+    print('bmaj*freq : ', beach.binfo_input[1][:,6])
+    print('bmin*freq : ', beach.binfo_input[1][:,7])
     print()
     print('Pixel cube 1')
     print('bmaj      : ', beach.binfo_pixel[0][:,0])
@@ -3527,6 +3614,8 @@ def printbeachconts(beach):
     print('freq      : ', beach.binfo_pixel[0][:,3])
     print('dx        : ', beach.binfo_pixel[0][:,4])
     print('rfreq/freq: ', beach.binfo_pixel[0][:,5])
+    print('bmaj*freq : ', beach.binfo_pixel[0][:,6])
+    print('bmin*freq : ', beach.binfo_pixel[0][:,7])
     print('Pixel cube 2')
     print('bmaj      : ', beach.binfo_pixel[1][:,0])
     print('bmin      : ', beach.binfo_pixel[1][:,1])
@@ -3534,6 +3623,8 @@ def printbeachconts(beach):
     print('freq      : ', beach.binfo_pixel[1][:,3])
     print('dx        : ', beach.binfo_pixel[1][:,4])
     print('rfreq/freq: ', beach.binfo_pixel[1][:,5])
+    print('bmaj*freq : ', beach.binfo_pixel[1][:,6])
+    print('bmin*freq : ', beach.binfo_pixel[1][:,7])
     print()
     print('Target cube 1')
     print('bmaj      : ', beach.binfo_target[0][:,0])
@@ -3542,6 +3633,8 @@ def printbeachconts(beach):
     print('freq      : ', beach.binfo_target[0][:,3])
     print('dx        : ', beach.binfo_target[0][:,4])
     print('rfreq/freq: ', beach.binfo_target[0][:,5])
+    print('bmaj*freq : ', beach.binfo_target[0][:,6])
+    print('bmin*freq : ', beach.binfo_target[0][:,7])
     print('Target cube 2')
     print('bmaj      : ', beach.binfo_target[1][:,0])
     print('bmin      : ', beach.binfo_target[1][:,1])
@@ -3549,6 +3642,8 @@ def printbeachconts(beach):
     print('freq      : ', beach.binfo_target[1][:,3])
     print('dx        : ', beach.binfo_target[1][:,4])
     print('rfreq/freq: ', beach.binfo_target[1][:,5])
+    print('bmaj*freq : ', beach.binfo_target[1][:,6])
+    print('bmin*freq : ', beach.binfo_target[1][:,7])
     print()
 
 if __name__ == '__main__':
@@ -3574,9 +3669,9 @@ if __name__ == '__main__':
     pinc = 5.
     bmaj0 = 10. 
     bmin0 = 7.
-    binc = 1.
+    binc = 0.
     bpa0 = 0
-    cinc = 7
+    cinc = 0
     
     gauprops = []
     
@@ -3589,7 +3684,7 @@ if __name__ == '__main__':
             planar[j, 2] = amp0+(i*naxis3+j)*ainc
             planar[j, 3] = bmaj0+(i*naxis3+j)*binc
             planar[j, 4] = bmin0+(i*naxis3+j)*binc
-            planar[j, 5] = bmin0+(i*naxis3+j)*cinc
+            planar[j, 5] = bpa0+(i*naxis3+j)*cinc
         gauprops.append(planar)
         
     print()
@@ -3649,5 +3744,28 @@ if __name__ == '__main__':
                'tra_fitsnames': outcubi
     }
     Beach(cubenames = params['cubes'], tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
+    print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
+    print()
+    print('########################')
+    print('########################')
+    print(' Test 4: Just images')
+    print('########################')
+    gauprops[0] = gauprops[0][0,:].reshape((1,6))
+    gauprops[1] = gauprops[1][0,:].reshape((1,6))
+    print(gauprops)
+    incubi = ['test4_incubus1.fits', 'test4_incubus2.fits']
+    Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis = 2, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
+    print('Created input cubes {:s} and {:s}'.format(incubi[0], incubi[1]))
+    printcubeinfo(incubi[0])
+    printcubeinfo(incubi[1])
+    outcubi = ['test4_outcubus1.fits', 'test4_outcubus2.fits']
+
+    # This is just a preliminary exercise to create a parameter input interface
+    params = { 'cubes': incubi,
+               'tra_fitsnames': outcubi
+    }
+    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
+    printbeachconts(beach)
+    beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
