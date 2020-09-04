@@ -33,7 +33,7 @@ class Beach:
                        stype = ['stdev', 'commonbeam'],
                        sample = 'all', percents = 90,
                        tolerance = 0.1, nsamps = 200, epsilon = 0.0005,
-                       tar_bmaj_inter = ['bmaj', 'frequency', 'commonbeam', 'total'],
+                       tar_bmaj_inter = ['bmaj', 'frequency', 'maximum', 'total'],
                        tar_bmaj_slope = ['bmaj', 'frequency',  'stdev', 'total'],
                        tar_bmaj_absc = 0.0,
                        tar_bmin_inter = ['bmin', 'frequency',  'commonbeam', 'total'],
@@ -1318,6 +1318,7 @@ class Beach:
         output = False
         paras = locals().copy()
         paras.pop('self')
+        paras.pop('verb')
         for param in paras.keys():
             if type(paras[param]) != type(None):
                 self.__dict__['_'+param] = copy.deepcopy(paras[param])
@@ -1782,6 +1783,7 @@ class Beach:
         output = False
         paras = locals().copy()
         paras.pop('self')
+        paras.pop('verb')
         for param in paras.keys():
             if type(paras[param]) != type(None):
                 self.__dict__['_'+param] = copy.deepcopy(paras[param])
@@ -1883,7 +1885,7 @@ class Beach:
 
         if self._bstats == None:
             if self._verb:
-                warnings.warn('Attempting to initialize bstats')
+                warnings.warn('bstats not available, initializing bstats')
             self._initbstats(verb = self._verb)
         
         if self._bstats == None:
@@ -1925,8 +1927,8 @@ class Beach:
         # Make sure we do have the required information available
         if type(self._binfo_input) == type(None):
             if verb or self._verb:
-                warnings.warn('Attempting to genereate input'+ \
-                              ' information struct.')
+                warnings.warn('Input information struct not '+ \
+                              'available, regenerating.')
             self._genbinfo_input()
         if type(self._binfo_input) == type(None):
             if verb or self._verb:
@@ -1942,7 +1944,6 @@ class Beach:
 
         # get struct
         #struct = self._binfo_input
-        print('scal', scal)
         for sca in scal:
             
             for sam in samp:
@@ -2258,7 +2259,7 @@ class Beach:
 
         return output
         
-    def _getar(self, item):
+    def _getar(self, item, verb = False):
         """
         Decode item and return part of a beam struct
 
@@ -2279,23 +2280,43 @@ class Beach:
         # First check which type of input this is
         if type(item) == type([]):
             if len(item) == 4:
-                
                 # The alternative is either numeric or quantity,
                 # so this is sufficient for identifying the input
                 if type(item[0]) == type(''):
-                    # print(self._bstats)
+
                     # Ensure that we can actually do this
                     if type(self._bstats) == type(None) or \
-                       self._bstats[item[0]][item[1]][item[2]][item[3]] \
-                       == np.nan:
+                       np.isnan(self._bstats[item[0]][item[1]][item[2]][item[3]]):
                         if verb or self._verb:
-                            warnings.warn('Attempting to genereate part of '+ \
-                                          'beam statistics struct.')
+                            warnings.warn('Parts of beam statistics struct '+ \
+                                          'not available, regenerating.')
+                            
+                        # If the item is not present, we add it and
+                        # generate the statistics
+                        if type(self._parameter) == type(''):
+                            if self._parameter != item[0]:
+                                self._parameter = [self._parameter]
+                        if type(self._scaling) == type(''):
+                            if self._scaling != item[1]:
+                                self._scaling = [self._scaling]
+                        if type(self._stype) == type(''):
+                            if self._stype != item[2]:
+                                self._stype = [self._stype]
+                        if type(self._sample) == type(''):
+                            if self._sample != item[2]:
+                                self._sample = [self._sample]
+                        if not item[0] in self._parameter:
+                            self._parameter += [item[0]]
+                        if not item[1] in self._scaling:
+                            self._scaling += [item[0]]
+                        if not item[0] in self._stype:
+                            self._stype += [item[0]]
+                        if not item[0] in self._sample:
+                            self._sample += [item[0]]
                         self.genbstats(parameter = item[0], scaling = item[1], stype =
                                        item[2], sample = item[3], verb = verb)
                     if type(self._bstats) == type(None) or \
-                       self._bstats[item[0]][item[1]][item[2]][item[3]] \
-                       == np.nan:
+                       np.isnan(self._bstats[item[0]][item[1]][item[2]][item[3]]):
                         if verb or self._verb:
                             warnings.warn('Failed to genereate beam statistics'+ \
                                           'struct. Returning empty-handed.')
@@ -2421,6 +2442,7 @@ class Beach:
         
         if stop:
             if verb or self._verb:
+                print('er')
                 warnings.warn('Parameters missing. Not generating target properties.')
             return
                                 
@@ -2438,21 +2460,21 @@ class Beach:
         # as this cascades up
         if type(self._bstats) == type(None):
             if verb or self._verb:
-                warnings.warn('Attempting to generate bstats')
+                warnings.warn('bstats not available, regenerating.')
             self.genbstats(verb = self._verb)
         if type(self._bstats) == type(None):
             if verb or self._verb:
                 warnings.warn('Failed to generate bstats. Not generating target.')
             return
-        tar_bmaj_inter = self._getar(self._tar_bmaj_inter)
-        tar_bmaj_slope = self._getar(self._tar_bmaj_slope)
-        tar_bmaj_absc  = self._getar(self._tar_bmaj_absc)
-        tar_bmin_inter = self._getar(self._tar_bmin_inter)
-        tar_bmin_slope = self._getar(self._tar_bmin_slope)
-        tar_bmin_absc  = self._getar(self._tar_bmin_absc)
-        tar_bpa_inter  = self._getar(self._tar_bpa_inter)
-        tar_bpa_slope  = self._getar(self._tar_bpa_slope)
-        tar_bpa_absc   = self._getar(self._tar_bpa_absc)
+        tar_bmaj_inter = self._getar(self._tar_bmaj_inter, verb = self._verb)
+        tar_bmaj_slope = self._getar(self._tar_bmaj_slope, verb = self._verb)
+        tar_bmaj_absc  = self._getar(self._tar_bmaj_absc, verb = self._verb)
+        tar_bmin_inter = self._getar(self._tar_bmin_inter, verb = self._verb)
+        tar_bmin_slope = self._getar(self._tar_bmin_slope, verb = self._verb)
+        tar_bmin_absc  = self._getar(self._tar_bmin_absc, verb = self._verb)
+        tar_bpa_inter  = self._getar(self._tar_bpa_inter, verb = self._verb)
+        tar_bpa_slope  = self._getar(self._tar_bpa_slope, verb = self._verb)
+        tar_bpa_absc   = self._getar(self._tar_bpa_absc, verb = self._verb)
 
         # For the preliminary output we make a copy of input
         targar = copy.deepcopy(self._binfo_pixel)
@@ -2466,7 +2488,6 @@ class Beach:
             else:
                 thafreq = targar[i][:,3]
 
-            print('tar_scaling', self._tar_scaling)
             if self._tar_scaling == 'frequency':
                 scale = normfreq[i]/thafreq
             else:
@@ -2513,6 +2534,7 @@ class Beach:
         output = False
         paras = locals().copy()
         paras.pop('self')
+        paras.pop('verb')
         for param in paras.keys():
             if type(paras[param]) != type(None):
                 self.__dict__['_'+param] = copy.deepcopy(paras[param])
@@ -2552,7 +2574,7 @@ class Beach:
 
         if type(self._binfo_target) == type(None):
             if verb or self._verb:
-                warnings.warn('Attempting to generate target')
+                warnings.warn('Target information not available, regenerating.')
             self.gentarget(verb = self._verb)
         if type(self._binfo_target) == type(None):
             if verb or self._verb:
@@ -3522,8 +3544,6 @@ class Beach:
 
             # Generate Gaussians and put their properties in header
             for j in range(gauprops[i].shape[0]):
-                print('j',j)
-                print(i,gauprops[i])
                 darray = self._gaussian_2dp( naxis1 = naxis1,
                                              naxis2 = naxis2, cdelt1 =
                                              1., cdelt2 = 1.,
@@ -3588,6 +3608,11 @@ def printcubeinfo(cubename):
 
 def printbeachconts(beach):
     print()
+    print('###############################')
+    print(' Input and output structures :')
+    print('###############################')
+    print()
+
     print('Input cube 1')
     print('bmaj      : ', beach.binfo_input[0][:,0])
     print('bmin      : ', beach.binfo_input[0][:,1])
@@ -3707,7 +3732,11 @@ if __name__ == '__main__':
     }
     beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
     printbeachconts(beach)
+    print()
+    print('########################')
+    
     beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
+    print()
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
     print('########################')
@@ -3730,6 +3759,7 @@ if __name__ == '__main__':
     beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
     printbeachconts(beach)
     beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
+    print()
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
     print('########################')
@@ -3744,15 +3774,16 @@ if __name__ == '__main__':
                'tra_fitsnames': outcubi
     }
     Beach(cubenames = params['cubes'], tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
+    print()
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
     print('########################')
     print('########################')
     print(' Test 4: Just images')
     print('########################')
+    print()
     gauprops[0] = gauprops[0][0,:].reshape((1,6))
     gauprops[1] = gauprops[1][0,:].reshape((1,6))
-    print(gauprops)
     incubi = ['test4_incubus1.fits', 'test4_incubus2.fits']
     Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis = 2, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
     print('Created input cubes {:s} and {:s}'.format(incubi[0], incubi[1]))
@@ -3767,5 +3798,6 @@ if __name__ == '__main__':
     beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
     printbeachconts(beach)
     beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
+    print()
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
