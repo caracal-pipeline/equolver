@@ -16,7 +16,6 @@ import pyfftw
 #import bokeh.layouts as bokeh_layouts
 import bokeh.plotting as bokeh_plotting
 import bokeh.io as bokeh_io
-from selenium.webdriver import Chrome, ChromeOptions
 
 class Beach:
     """
