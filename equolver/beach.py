@@ -11,6 +11,13 @@ from astropy import units as u
 from kapteyn import wcs as kwcs
 import pyfftw
 
+#from bokeh.layouts import gridplot
+#from bokeh.plotting import figure, output_file, show
+#import bokeh.layouts as bokeh_layouts
+import bokeh.plotting as bokeh_plotting
+import bokeh.io as bokeh_io
+from selenium.webdriver import Chrome, ChromeOptions
+
 class Beach:
     """
     Lame acronym for a utility to equalize synthesized beams over
@@ -3581,6 +3588,38 @@ class Beach:
             
             hdu.writeto(outcubi[i], overwrite = overwrite)
 
+def testplot():
+    # Log-Normal Distribution
+
+    mu, sigma = 0, 0.5
+
+    measured = np.random.lognormal(mu, sigma, 1000)
+    hist, edges = np.histogram(measured, density=True, bins=50)
+    
+    x = np.linspace(0.0001, 8.0, 1000)
+    pdf = 1/(x* sigma * np.sqrt(2*np.pi)) * np.exp(-(np.log(x)-mu)**2 / (2*sigma**2))
+    #cdf = (1+special.erf((np.log(x)-mu)/(np.sqrt(2)*sigma)))/2
+
+    r = []
+    for i in range(4):
+        r += [ bokeh_plotting.figure(title='Log Normal Distribution', tools='pan,box_zoom,wheel_zoom,reset,save',
+                               background_fill_color='#fafafa') ]
+        r[-1].plot_height = 300
+        r[-1].plot_width = 400
+        r[-1].quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:],
+           fill_color='navy', line_color='white', alpha=0.5)
+        r[-1].line(x, pdf, line_color='#ff8888', line_width=4, alpha=0.7, legend_label='PDF')
+        r[-1].y_range.start = 0
+        r[-1].legend.location = 'center_right'
+
+    q = bokeh_plotting.gridplot([[r[0], r[1]], [r[2], r[3]]])
+    bokeh_plotting.output_file('Test.html')
+    bokeh_plotting.save(q)
+
+    # There is no straightforward method to export plots in a simple
+    # way with bokeh, therefore one needs to add a matplotlib version
+    # as well
+
        
 def printcubeinfo(cubename):
     print()
@@ -3801,3 +3840,6 @@ if __name__ == '__main__':
     print()
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
+
+#    testplot()
+    
