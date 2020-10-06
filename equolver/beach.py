@@ -15,6 +15,8 @@ import pyfftw
 #from bokeh.plotting import figure, output_file, show
 #import bokeh.layouts as bokeh_layouts
 import bokeh.plotting as bokeh_plotting
+import bokeh.models as bokeh_models
+import bokeh.layouts as bokeh_layouts
 import bokeh.io as bokeh_io
 
 class Beach:
@@ -37,8 +39,11 @@ class Beach:
                        parameter = 'all',
                        scaling = 'frequency',
                        stype = ['stdev', 'commonbeam'],
-                       sample = 'all', percents = 90,
+                       sample = 'total', percents = 90,
                        tolerance = 0.1, nsamps = 200, epsilon = 0.0005,
+                       hist_plotname = None, hist_interactive = None, 
+                       hist_sample = 'total', hist_scaling = 'frequency',
+                       hist_n_per_bin = 5, hist_overwrite = False,
                        tar_bmaj_inter = ['bmaj', 'frequency', 'maximum', 'total'],
                        tar_bmaj_slope = ['bmaj', 'frequency',  'stdev', 'total'],
                        tar_bmaj_absc = 0.0,
@@ -74,15 +79,24 @@ class Beach:
         _bpa_replace (bool)   : Enforce usage of default values? 
 
         _binfo_input (list) : List of arrays of point spread func-
-                                tion, in the order of headernames and
-                                headers each array of size (chans, 6),
-                                where first column bmaj in deg, second
-                                column bmin in deg, third column bpa
-                                in deg, fourth column frequency in Hz,
-                                fifth column pixel size in deg, sixth
-                                column reference frequency divided by
-                                frequency, chans is the number of
-                                channels.
+                              tion, in the order of headernames and
+                              headers each array of size (chans, 8),
+                              where first column bmaj in deg, second
+                              column bmin in deg, third column bpa in
+                              deg, fourth column frequency in Hz,
+                              fifth column pixel size in deg, sixth
+                              column reference frequency divided by
+                              frequency, seventh column bmaj in deg
+                              scaled with frequency divided by the
+                              normalisation frequency, eighth column
+                              bmin in deg scaled with frequency
+                              divided by the normalisation frequency,
+                              ninth column beam solid angle
+                              (2pi/ln(256))*first_column*second_columnn,
+                              10th column beam solid angle at
+                              normalisation frequency
+                              (2pi/ln(256))*seventh_column*eighth_columnn
+                              is the number of channels
         _binfo_pixel (list)  : _binfo_input converted into pixel
                                scaling using dispersion instead of HPBW
         _bstats (dict)       : Dictionary containing all statistics
@@ -115,6 +129,13 @@ class Beach:
 
         if self._genbstats_exe:
             self.genbstats(verb = self._verb)
+
+        for para in ['hist_plotname', 'hist_interactive',
+                     'hist_overwrite', 'hist_sample',
+                     'hist_scaling', 'hist_overwrite', 'hist_n_per_bin']:
+            self.__dict__['_'+para] = copy.deepcopy(locals()[para])
+           
+        self.genhistoplots(verb = self._verb)
 
         for para in [ 'tar_bmaj_inter', 'tar_bmaj_slope',
                       'tar_bmaj_absc', 'tar_bmin_inter',
@@ -176,6 +197,14 @@ class Beach:
 
         # Statistics
         self._bstats = None
+
+        self._hist_plotname = None
+        self._hist_interactive = None
+        self._hist_overwrite = None
+        self._hist_sample = None
+        self._hist_scaling = None
+        self._hist_overwrite = None
+        self._hist_n_per_bin = None
         
         self._tar_bmaj_inter = None
         self._tar_bmaj_slope = None
@@ -508,7 +537,7 @@ class Beach:
 
     @sample.deleter
     def sample(self, value):
-        self._sample = 'all'
+        self._sample = 'total'
         self._bstats = None
         self._binfo_target = None
         return
@@ -608,6 +637,135 @@ class Beach:
         self._bstats = None
         self._binfo_target = None
         return
+
+    ####
+    
+    @property
+    def hist_interactive(self):
+        """
+        Return a copy of hist_interactive
+        """
+        return copy.deepcopy(self._hist_interactive)
+
+    @hist_interactive.setter
+    def hist_interactive(self, value):
+        """
+        Set hist_interactive
+        """
+        self._hist_interactive = copy.deepcopy(value)
+        #self.genhistoplots(verb = False)
+        return
+
+    @hist_interactive.deleter
+    def hist_interactive(self, value):
+        self._hist_interactive = None
+        return
+    
+    @property
+    def hist_n_per_bin(self):
+        """
+        Return a copy of hist_n_per_bin
+        """
+        return copy.deepcopy(self._hist_n_per_bin)
+
+    @hist_n_per_bin.setter
+    def hist_n_per_bin(self, value):
+        """
+        Set hist_n_per_bin
+        """
+        self._hist_n_per_bin = copy.deepcopy(value)
+        #self.genhistoplots(verb = False)
+        return
+
+    @hist_n_per_bin.deleter
+    def hist_n_per_bin(self, value):
+        self._hist_n_per_bin = 5
+        return
+    
+    @property
+    def hist_plotname(self):
+        """
+        Return a copy of hist_plotname
+        """
+        return copy.deepcopy(self._hist_plotname)
+
+    @hist_plotname.setter
+    def hist_plotname(self, value):
+        """
+        Set hist_plotname
+        """
+        self._hist_plotname = copy.deepcopy(value)
+        #self.genhistoplots(verb = False)
+        return
+
+    @hist_plotname.deleter
+    def hist_plotname(self, value):
+        self._hist_plotname = None
+        return
+    
+    @property
+    def hist_sample(self):
+        """
+        Return a copy of hist_sample
+        """
+        return copy.deepcopy(self._hist_sample)
+
+    @hist_sample.setter
+    def hist_sample(self, value):
+        """
+        Set hist_sample
+        """
+        self._hist_sample = copy.deepcopy(value)
+        #self.genhistoplots(verb = False)
+        return
+
+    @hist_sample.deleter
+    def hist_sample(self, value):
+        self._hist_sample = 'total'
+        return
+    
+    @property
+    def hist_scaling(self):
+        """
+        Return a copy of hist_scaling
+        """
+        return copy.deepcopy(self._hist_scaling)
+
+    @hist_scaling.setter
+    def hist_scaling(self, value):
+        """
+        Set hist_scaling
+        """
+        self._hist_scaling = copy.deepcopy(value)
+        self.genhistoplots(verb = False)
+        return
+
+    @hist_interactive.deleter
+    def hist_scaling(self, value):
+        self._hist_scaling = 'frequency'
+        return
+
+    @property
+    def hist_overwrite(self):
+        """
+        Return a copy of hist_overwrite
+        """
+        return copy.deepcopy(self._hist_overwrite)
+
+    @hist_overwrite.setter
+    def hist_overwrite(self, value):
+        """
+        Set hist_overwrite
+        """
+        self._hist_overwrite = copy.deepcopy(value)
+        #self.genhistoplots(verb = False)
+        return
+
+    @hist_interactive.deleter
+    def hist_overwrite(self, value):
+        self._hist_overwrite = False
+        return
+###
 
     @property
     def tar_bmaj_inter(self):
@@ -1151,9 +1309,7 @@ class Beach:
             cubenamelist = self._cubenames
             
         for cube in self._cubenames:
-            opencube = fits.open(cube)
-            self._headers += [opencube[0].header]
-            opencube.close()
+            self._headers += [fits.getheader(cube)]
 
         # Cascade down
         self.genbinfo(verb = self._verb)
@@ -1187,7 +1343,7 @@ class Beach:
                 naxis3 = 1
         
 
-            self._binfo_input.append(np.empty((naxis3,8,)))
+            self._binfo_input.append(np.empty((naxis3,10,)))
             self._binfo_input[-1][:] = np.nan
         return
 
@@ -1522,6 +1678,10 @@ class Beach:
                 thafreq/normfreq[i]
             self._binfo_input[i][:,7] = self._binfo_input[i][:,1]*\
                 thafreq/normfreq[i]
+            self._binfo_input[i][:,8] = (2*np.pi/np.log(256))*\
+                self._binfo_input[i][:,0]*self._binfo_input[i][:,1]
+            self._binfo_input[i][:,9] = (2*np.pi/np.log(256))*\
+                self._binfo_input[i][:,6]*self._binfo_input[i][:,7]
             
         self._genbinfo_pixel(verb = verb)
 
@@ -1714,6 +1874,10 @@ class Beach:
             boutfarray[:,6] = binfarray[:,6]/binfarray[:,4]/np.sqrt(np.log(256))
             boutfarray[:,7] = binfarray[:,7]/binfarray[:,4]/np.sqrt(np.log(256))
 
+            # bsa simply scale by pixel size
+            boutfarray[:,8] = binfarray[:,8]/(binfarray[:,4]*binfarray[:,4])
+            boutfarray[:,9] = binfarray[:,9]/(binfarray[:,4]*binfarray[:,4])
+            
             self._binfo_pixel.append(boutfarray)
         return
         
@@ -1779,6 +1943,81 @@ class Beach:
                         self._bstats[key0][key1][key2]['cube'].append(np.nan)
                         
         return
+    def _getcollist(self, sca, sam, four):
+        """
+        Helper function to genbstats or genhistoplots
+        """
+        
+        # collect sample as list of np arrays
+        collist = []
+
+        if four:
+            if sam == 'cube':
+                for i in self._binfo_input:
+                    if sca == 'constant':
+                        collist.append(i[:,[0,1,2,8]])
+                    else:
+                        collist.append(i[:,[6,7,2,9]])
+
+            elif sam == 'chan':
+                for i in range(self._bstats['bmaj']['constant']['maximum'][sam].shape[0]):
+                    collist.append(np.empty((0,4,), dtype=np.float64))
+                    for j in self._binfo_input:
+                        if j.shape[0] > i:
+                            if sca == 'constant':
+                                collist[i] = np.append(collist[i],
+                                                   j[i:i+1,[0,1,2,8]],
+                                                   axis = 0)
+                            else:
+                                collist[i] = np.append(collist[i],
+                                                   j[i:i+1,[6,7,2,9]],
+                                                   axis = 0)
+            elif sam == 'total':
+                collist = [np.empty((0,4,))]
+                for i in self._binfo_input:
+                    if sca == 'constant':
+                        collist[0] = np.append(collist[0], i[:,[0,1,2,8]],
+                                               axis = 0)
+                    else:
+                        collist[0] = np.append(collist[0], i[:,[6,7,2,9]],
+                                               axis = 0)
+            else:
+                return None
+        else:
+            if sam == 'cube':
+                for i in self._binfo_input:
+                    if sca == 'constant':
+                        collist.append(i[:,[0,1,2]])
+                    else:
+                        collist.append(i[:,[6,7,2]])
+
+            elif sam == 'chan':
+                for i in range(self._bstats['bmaj']['constant']['maximum'][sam].shape[0]):
+                    collist.append(np.empty((0,3,), dtype=np.float64))
+                    for j in self._binfo_input:
+                        if j.shape[0] > i:
+                            if sca == 'constant':
+                                collist[i] = np.append(collist[i],
+                                                   j[i:i+1,[0,1,2]],
+                                                   axis = 0)
+                            else:
+                                collist[i] = np.append(collist[i],
+                                                   j[i:i+1,[6,7,2]],
+                                                   axis = 0)
+            elif sam == 'total':
+                collist = [np.empty((0,3,))]
+                for i in self._binfo_input:
+                    if sca == 'constant':
+                        collist[0] = np.append(collist[0], i[:,[0,1,2]],
+                                               axis = 0)
+                    else:
+                        collist[0] = np.append(collist[0], i[:,[6,7,2]],
+                                               axis = 0)
+            else:
+                return None
+            
+        
+        return collist
     
     def _initbstatsvar(self, parameter = None, stype = None, scaling = None,
                        sample = None, percents = None, tolerance = None,
@@ -1827,7 +2066,8 @@ class Beach:
         epsilon (float)               : Epsilon for common beam
 
         The method generates statistics on the collected beam
-        properties. The parameters parameter, scaling, sample, and
+        properties. 
+        The parameters parameter, scaling, sample, and
         type determine which part of the bstats structure gets
         filled. If for any of the parameters 'all' is chosen (which is
         the default), all fields are filled. If the scaling type is
@@ -1836,7 +2076,10 @@ class Beach:
         same norm-frequency nf, assuming that the beam sizes scale
         with 1/frequency. b(nf) = b(f)*f/nf .
 
-        From top to bottom level:
+        The _bstats entity is a nested dictionary
+        _bstats[parameter][scaling][stype][sample], where sample
+        determines the type of element (numpy scalar, numpy ndarray,
+        or list of scalars, see below):
 
         parameter: 
             major axis dispersions/hpbws ('bmaj')
@@ -1938,7 +2181,7 @@ class Beach:
             self._genbinfo_input()
         if type(self._binfo_input) == type(None):
             if verb or self._verb:
-                warnings.warn('Inut information struct '+ \
+                warnings.warn('Input information struct '+ \
                               'cannot be generated. Returning without '+ \
                               'generating statistics.')
             return
@@ -1953,45 +2196,14 @@ class Beach:
         for sca in scal:
             
             for sam in samp:
+                
+                collist = self._getcollist(sca, sam, False)
 
-                # collect sample as list of np arrays
-                collist = []
-
-                #print(sam)
-
-                if sam == 'cube':
-                    for i in self._binfo_input:
-                        if sca == 'constant':
-                            collist.append(i[:,[0,1,2]])
-                        else:
-                            collist.append(i[:,[6,7,2]])
-                            
-                elif sam == 'chan':
-                    for i in range(self._bstats['bmaj']['constant']['maximum'][sam].shape[0]):
-                        collist.append(np.empty((0,3,), dtype=np.float64))
-                        for j in self._binfo_input:
-                            if j.shape[0] > i:
-                                if sca == 'constant':
-                                    collist[i] = np.append(collist[i],
-                                                       j[i:i+1,[0,1,2]],
-                                                       axis = 0)
-                                else:
-                                    collist[i] = np.append(collist[i],
-                                                       j[i:i+1,[6,7,2]],
-                                                       axis = 0)
-                elif sam == 'total':
-                    collist = [np.empty((0,3,))]
-                    for i in self._binfo_input:
-                        if sca == 'constant':
-                            collist[0] = np.append(collist[0], i[:,[0,1,2]],
-                                                   axis = 0)
-                        else:
-                            collist[0] = np.append(collist[0], i[:,[6,7,2]],
-                                                   axis = 0)
-                else:
+                if type(collist) == type(None):
                     if verb or self._verb:
                         warnings.warn('Statistics cannot be generated.'+ \
                                       'Check sample parameter. Returning.')
+                    
                 #print('collist', collist)
 
                 #stackedcahn = 1
@@ -2371,6 +2583,171 @@ class Beach:
                         warnings.warn('Parameter {} is not defined.'.format(param))
                     output = True
         return output
+    
+    def _gaussian(self, x, cent, amp, sigma):
+        """
+        Gaussian
+        Input:
+        cent (float): centre
+        amp (float) : amplitude
+        sigma (float) : sigma
+        Return:
+        gaussian() Gaussian
+        """
+        return amp*np.exp(-0.5*np.power((x-cent)/sigma,2))
+
+
+    def _inithistovar(self, hist_plotname = None, hist_interactive =
+                      None, hist_sample = None, hist_scaling = None,
+                      hist_overwrite = None, hist_n_per_bin = None,
+                      verb = True):
+        output = False
+        paras = locals().copy()
+        paras.pop('self')
+        paras.pop('verb')
+        
+        for param in paras.keys():
+            if type(paras[param]) != type(None):
+                self.__dict__['_'+param] = copy.deepcopy(paras[param])
+
+        # Check if we do any plot
+        if type(self._hist_plotname) == type(None) and type(self._hist_interactive) == type(None):
+            return output
+            
+        # For the rest we need only some parameters to be defined
+        paras.pop('hist_plotname')
+        paras.pop('hist_interactive')
+
+        for param in paras.keys():
+            if self.__dict__['_'+param] == None:
+                if self._verb or verb:
+                    warnings.warn('Parameter {} is not defined.'.format(param))
+                output = True
+        return output
+
+    def genhistoplots(self, hist_plotname = None, hist_interactive =
+                      None, hist_sample = None, hist_scaling = None,
+                      hist_overwrite = None, hist_n_per_bin = None, verb
+                      = True):
+        """Generate a histogram
+        
+        Input:
+        hist_plotname (str)   : Name of plot
+        hist_interactive (str): Name of interactive plot
+        hist_sample (str)     : Sample to plot 'cube', 'chan', or 'total'
+        hist_scaling (str)    : Scaling to use ('frequency' or 'constant')
+        hist_overwrite (bool) : Allow overwriting files produced before
+        verb (bool)           : Use verbose mode (if) True or not
+
+        Generates histograms of the beam properties read in. This will
+        either produce static histograms or an interactive html
+        file. With hist_sample the user can choose which statistics
+        should be generated. 'cube' means that the histogram is
+        generated for each cube, 'chan' means that it is generated for
+        a specific channel in all cubes, 'total' (the default) means
+        all channels in all cubes. hist_scaling decides if the
+        statistics are plotted using the original beam properties or
+        if they are first scaled to the norm frequency assuming that
+        the beam scales proportionally to the inverse of the
+        frequency.
+
+        """
+        arguments = locals().copy()
+        arguments.pop('self')
+        stop = self._inithistovar(**arguments)
+        if stop:
+            if verb or self._verb:
+                warnings.warn('Parameters missing. Not generating histogram.')
+            return
+
+        # If no plots are requested, just return
+        if type(self._hist_plotname) == type(None) and type(self._hist_interactive) == type(None):
+            return
+
+        plotname = self._hist_plotname
+        intername = self._hist_interactive
+        
+        if type(self._hist_plotname) == type('') and self._hist_plotname[-4:] != '.png':
+            plotname = self._hist_plotname+'.png'
+        if type(self._hist_interactive) == type('') and self._hist_interactive[-5:] != '.html':
+            intername = self._hist_interactive+'.html'
+
+        # Get the sample
+        collist = self._getcollist(self._hist_scaling, self._hist_sample, True)
+
+        # Get as much statistics as possible
+        stats = []
+        for para in ['bmaj', 'bmin', 'bpa']:
+            valdict = {}
+            for variable in ['minimum', 'maximum', 'average', 'stdev', 'median', 'mad', 'madstdev', 'percentile', 'percents', 'commonbeam']:
+                valdict[variable] = self._bstats[para][self._hist_scaling][variable][self._hist_sample]
+            stats += [valdict]
+            
+        fourtitles = ['BMAJ', 'BMIN', 'BPA', 'BSA']
+        fourunits = ['arcsec', 'arcsec', 'deg', 'sqarcsec']
+        children = []
+        children2 = []
+        for i in range(len(collist)):
+            k = len('{:d}'.format(len(collist)-1))
+            
+            if self._hist_sample == 'total':
+                titlestring = '<b>Beam properties of all planes in all data sets</b>'
+            elif self._hist_sample == 'cube':
+                titlestring = '<b>Beam properties of planes in data set {:s}</b>'.format(self._cubenames[i])
+            elif self._hist_sample == 'chan':
+                titlestring = '<b>Beam properties of channel {:d}</b>'.format(i)
+            else:
+                if verb or self._verb:
+                    warnings.warn('hist_sample not properly defined. Not generating histogram.')
+                return              
+
+            fourhists = [
+                np.histogram(collist[i][:,0]*3600., bins=-(-collist[i][:,0].size//self._hist_n_per_bin)),
+                np.histogram(collist[i][:,1]*3600., bins=-(-collist[i][:,0].size//self._hist_n_per_bin)),
+                np.histogram(collist[i][:,2], bins=-(-collist[i][:,0].size//self._hist_n_per_bin)),
+                np.histogram(collist[i][:,3]*3600.*3600., bins=-(-collist[i][:,0].size//self._hist_n_per_bin))
+            ]
+            r = []
+            
+            # Now get the available properties
+            minimum = 0
+            maximum = 0
+            taverage = 0
+            tstdev   = 0
+            median  = 0
+            mad     = 0
+            madstdev = 0
+            percentile = 0
+            percents = 0
+            commonbeam = 0
+            
+            for j in range(4):
+                
+                # Get the stats if available
+                r += [ bokeh_plotting.figure(tools='pan,box_zoom,wheel_zoom,reset,save',
+                                             background_fill_color='#fafafa', x_axis_label='{:s} ({:s})'.format(fourtitles[j], fourunits[j]), y_axis_label = 'Counts') ]
+                r[-1].plot_height = 300
+                r[-1].plot_width = 300
+                r[-1].quad(top=fourhists[j][0], bottom=0, left=fourhists[j][1][:-1], right=fourhists[j][1][1:],
+                           fill_color='navy', line_color='white', alpha=0.5)
+                #r[-1].line(x, pdf, line_color='#ff8888', line_width=4, alpha=0.7, legend_label='PDF')
+                r[-1].y_range.start = 0
+                #r[-1].legend.location = 'center_right'
+
+            children += [bokeh_models.widgets.markups.Div(text=titlestring, style={'font-size': '125%', 'font-family': 'bf', 'color': 'black'})]
+            children += [bokeh_plotting.gridplot([[r[0], r[1], r[2], r[3]]])]
+            
+            children2 += [bokeh_models.widgets.markups.Div(text=titlestring, style={'font-size': '125%', 'font-family': 'bf', 'color': 'black'})]
+            children2 += [bokeh_plotting.gridplot([[r[0], r[1], r[2], r[3]]], toolbar_location=None)]
+            
+        q = bokeh_layouts.column(children=children)
+        q2 = bokeh_layouts.column(children=children2)
+        if type(intername) != type(None):
+            bokeh_plotting.output_file(intername)
+            bokeh_plotting.save(q)
+        if type(plotname) != type(None):
+            bokeh_io.export_png(q2, filename=plotname)
+    
 
     def gentarget(self, tar_bmaj_inter = None, tar_bmaj_slope = None,
                   tar_bmaj_absc = None, tar_bmin_inter = None,
@@ -2378,7 +2755,8 @@ class Beach:
                   tar_bpa_inter = None, tar_bpa_slope = None,
                   tar_bpa_absc = None, tar_scaling = None,
                   verb = True):
-        """Generate a target beam structure
+        """
+        Generate a target beam structure
 
         Input:
         (multiple: None, a float, a list of floats, a numpy array, 
@@ -3839,6 +4217,52 @@ if __name__ == '__main__':
     print()
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
-
-#    testplot()
     
+    print('########################')
+    print('########################')
+    print(' Test 5: Statistics plots')
+    print('########################')
+    print()
+
+    # Now we need more cubes and more planes
+    # 20 planes
+    naxis3 = 20
+    
+    amp0 = 1. # Amplitude
+    ainc = 0.01 # Increase in amplitude
+    pinc = 0.5 # Increase in position
+    bmaj0 = 10. # Major axis
+    bmin0 = 7. # Minor axis
+    binc = 0.1 # Axis increase
+    bpa0 = 0 # Position angle
+    cinc = 0.3 # Position angle increase
+    
+    gauprops = []
+    
+    # 10 cubes
+    incubi = []
+    outcubi = []
+    for i in range(10):
+        planar = np.zeros((naxis3,6))
+        for j in range(naxis3):
+            planar[j, 0] = naxis1//2+(i*naxis3+j)*pinc
+            planar[j, 1] = naxis2//2+(i*naxis3+j)*pinc
+            planar[j, 2] = amp0+(i*naxis3+j)*ainc
+            planar[j, 3] = bmaj0+(i*naxis3+j)*binc*(1+(i*naxis3+j)/10.)
+            planar[j, 4] = (bmin0+(i*naxis3+j)*binc*(1+(i*naxis3+j)/8.))/2
+            planar[j, 5] = bpa0+(i*naxis3+j)*cinc*(1+(i*naxis3+j)/6.)
+        gauprops.append(planar)
+        incubi.append('test5_incubus_{:d}.fits'.format(i))
+        outcubi.append('test5_outcubus_{:d}.fits'.format(i))
+        
+    Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis = 4, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
+    params = { 'cubes': incubi,
+               'tra_fitsnames': outcubi
+    }
+    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
+    printbeachconts(beach)
+    beach.genhistoplots(hist_plotname='test5.png', hist_interactive='test5.html', hist_scaling = 'constant', hist_sample = 'chan', hist_n_per_bin = 2, hist_overwrite = True)
+    #beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
+    print()
+    print('Created output cubes')
+    print()
