@@ -37,9 +37,10 @@ class Beach:
                        restfreq = HIFREQ, restfreq_replace = False,
                        normfreq = 1E9,
                        parameter = 'all',
-                       scaling = 'frequency',
-                       stype = ['stdev', 'commonbeam'],
-                       sample = 'total', percents = 90,
+                       scaling = 'all',
+                       #stype = ['average', 'stdev', 'commonbeam'],
+                       stype = 'all',
+                       sample = 'all', percents = 90,
                        tolerance = 0.1, nsamps = 200, epsilon = 0.0005,
                        hist_plotname = None, hist_interactive = None, 
                        hist_sample = 'total', hist_scaling = 'frequency',
@@ -96,11 +97,16 @@ class Beach:
                               10th column beam solid angle at
                               normalisation frequency
                               (2pi/ln(256))*seventh_column*eighth_columnn
-                              is the number of channels
-        _binfo_pixel (list)  : _binfo_input converted into pixel
-                               scaling using dispersion instead of HPBW
-        _bstats (dict)       : Dictionary containing all statistics
-        _binfo_target (list)  : Target beam properties
+                              eleventh column HPBW of a circular
+                              Gaussian with BSA of column 9, twelfth
+                              column HPBW of a circular Gaussian with
+                              BSA of column 10. chans is the number
+                              of channels _binfo_pixel (list) :
+                              _binfo_input converted into pixel
+                              scaling using dispersion instead of HPBW
+                              _bstats (dict) : Dictionary containing
+                              all statistics _binfo_target (list) :
+                              Target beam properties
 
         """
         self._initvars()
@@ -1343,7 +1349,7 @@ class Beach:
                 naxis3 = 1
         
 
-            self._binfo_input.append(np.empty((naxis3,10,)))
+            self._binfo_input.append(np.empty((naxis3,12,)))
             self._binfo_input[-1][:] = np.nan
         return
 
@@ -1554,6 +1560,9 @@ class Beach:
                               'disables further processing.')
             return
 
+        print('genbinfo: reading beam info.')
+        print()
+        
         normfreq = self._getdefault(self._normfreq)
 
         # Get defaults
@@ -1682,6 +1691,8 @@ class Beach:
                 self._binfo_input[i][:,0]*self._binfo_input[i][:,1]
             self._binfo_input[i][:,9] = (2*np.pi/np.log(256))*\
                 self._binfo_input[i][:,6]*self._binfo_input[i][:,7]
+            self._binfo_input[i][:,10] = np.sqrt(self._binfo_input[i][:,0]*self._binfo_input[i][:,1])
+            self._binfo_input[i][:,11] = np.sqrt(self._binfo_input[i][:,6]*self._binfo_input[i][:,7])
             
         self._genbinfo_pixel(verb = verb)
 
@@ -1877,6 +1888,10 @@ class Beach:
             # bsa simply scale by pixel size
             boutfarray[:,8] = binfarray[:,8]/(binfarray[:,4]*binfarray[:,4])
             boutfarray[:,9] = binfarray[:,9]/(binfarray[:,4]*binfarray[:,4])
+
+            # average beam
+            boutfarray[:,10] = binfarray[:,10]/binfarray[:,4]/np.sqrt(np.log(256))
+            boutfarray[:,11] = binfarray[:,11]/binfarray[:,4]/np.sqrt(np.log(256))
             
             self._binfo_pixel.append(boutfarray)
         return
@@ -1919,7 +1934,7 @@ class Beach:
             
         self._bstats = {}
         # parameter
-        for key0 in ['bmaj', 'bmin', 'bpa']:
+        for key0 in ['bmaj', 'bmin', 'bpa', 'bsa', 'ceb']:
             self._bstats[key0] = {}
             
             # scaling
@@ -1943,7 +1958,8 @@ class Beach:
                         self._bstats[key0][key1][key2]['cube'].append(np.nan)
                         
         return
-    def _getcollist(self, sca, sam, four):
+    
+    def _getcollist(self, sca, sam):
         """
         Helper function to genbstats or genhistoplots
         """
@@ -1951,71 +1967,38 @@ class Beach:
         # collect sample as list of np arrays
         collist = []
 
-        if four:
-            if sam == 'cube':
-                for i in self._binfo_input:
-                    if sca == 'constant':
-                        collist.append(i[:,[0,1,2,8]])
-                    else:
-                        collist.append(i[:,[6,7,2,9]])
+        
+        if sam == 'cube':
+            for i in self._binfo_input:
+                if sca == 'constant':
+                    collist.append(i[:,[0,1,2,8,10]])
+                else:
+                    collist.append(i[:,[6,7,2,9,11]])
 
-            elif sam == 'chan':
-                for i in range(self._bstats['bmaj']['constant']['maximum'][sam].shape[0]):
-                    collist.append(np.empty((0,4,), dtype=np.float64))
-                    for j in self._binfo_input:
-                        if j.shape[0] > i:
-                            if sca == 'constant':
-                                collist[i] = np.append(collist[i],
-                                                   j[i:i+1,[0,1,2,8]],
-                                                   axis = 0)
-                            else:
-                                collist[i] = np.append(collist[i],
-                                                   j[i:i+1,[6,7,2,9]],
-                                                   axis = 0)
-            elif sam == 'total':
-                collist = [np.empty((0,4,))]
-                for i in self._binfo_input:
-                    if sca == 'constant':
-                        collist[0] = np.append(collist[0], i[:,[0,1,2,8]],
+        elif sam == 'chan':
+            for i in range(self._bstats['bmaj']['constant']['maximum'][sam].shape[0]):
+                collist.append(np.empty((0,5,), dtype=np.float64))
+                for j in self._binfo_input:
+                    if j.shape[0] > i:
+                        if sca == 'constant':
+                            collist[i] = np.append(collist[i],
+                                               j[i:i+1,[0,1,2,8,10]],
                                                axis = 0)
-                    else:
-                        collist[0] = np.append(collist[0], i[:,[6,7,2,9]],
+                        else:
+                            collist[i] = np.append(collist[i],
+                                               j[i:i+1,[6,7,2,9,11]],
                                                axis = 0)
-            else:
-                return None
+        elif sam == 'total':
+            collist = [np.empty((0,5,))]
+            for i in self._binfo_input:
+                if sca == 'constant':
+                    collist[0] = np.append(collist[0], i[:,[0,1,2,8,10]],
+                                           axis = 0)
+                else:
+                    collist[0] = np.append(collist[0], i[:,[6,7,2,9,11]],
+                                           axis = 0)
         else:
-            if sam == 'cube':
-                for i in self._binfo_input:
-                    if sca == 'constant':
-                        collist.append(i[:,[0,1,2]])
-                    else:
-                        collist.append(i[:,[6,7,2]])
-
-            elif sam == 'chan':
-                for i in range(self._bstats['bmaj']['constant']['maximum'][sam].shape[0]):
-                    collist.append(np.empty((0,3,), dtype=np.float64))
-                    for j in self._binfo_input:
-                        if j.shape[0] > i:
-                            if sca == 'constant':
-                                collist[i] = np.append(collist[i],
-                                                   j[i:i+1,[0,1,2]],
-                                                   axis = 0)
-                            else:
-                                collist[i] = np.append(collist[i],
-                                                   j[i:i+1,[6,7,2]],
-                                                   axis = 0)
-            elif sam == 'total':
-                collist = [np.empty((0,3,))]
-                for i in self._binfo_input:
-                    if sca == 'constant':
-                        collist[0] = np.append(collist[0], i[:,[0,1,2]],
-                                               axis = 0)
-                    else:
-                        collist[0] = np.append(collist[0], i[:,[6,7,2]],
-                                               axis = 0)
-            else:
-                return None
-            
+            return None            
         
         return collist
     
@@ -2042,11 +2025,12 @@ class Beach:
     def genbstats(self, parameter = None, scaling = None, stype = None,
                   sample = None, percents = None, tolerance = None,
                   nsamps = None, epsilon = None, verb = True):
-        """Generate statistics and dump it into the bstats structure
+        """
+        Generate statistics and dump it into the bstats structure
         
         Input:
         parameter (str or list of str): Parameter name ('bmaj', 
-                                        'bmin', 'bpa')
+                                        'bmin', 'bpa', 'bsa', 'ceb')
         scaling (str or list of str)    : Scaling type ('constant', 
                                         'frequency')
         stype (str or list of str)    : Type of statistics to
@@ -2066,15 +2050,16 @@ class Beach:
         epsilon (float)               : Epsilon for common beam
 
         The method generates statistics on the collected beam
-        properties. 
-        The parameters parameter, scaling, sample, and
+        properties.  The parameters parameter, scaling, sample, and
         type determine which part of the bstats structure gets
         filled. If for any of the parameters 'all' is chosen (which is
         the default), all fields are filled. If the scaling type is
         'constant', the given values for bmaj and bmin are evaluated,
         if 'frequency' is chosen, all beam sizes are scaled to the
         same norm-frequency nf, assuming that the beam sizes scale
-        with 1/frequency. b(nf) = b(f)*f/nf .
+        with 1/frequency. b(nf) = b(f)*f/nf . bsa is the beam solid
+        angle of a beam, ceb the circular equivalent beam, the
+        circular beam with a beam solid angle of bsa (sqrt(bmaj*bmin))
 
         The _bstats entity is a nested dictionary
         _bstats[parameter][scaling][stype][sample], where sample
@@ -2085,6 +2070,8 @@ class Beach:
             major axis dispersions/hpbws ('bmaj')
             minor axis dispersions/hpbws ('bmin')
             beam position angles ('bpa')
+            beam solid angle ('bsa')
+            circular equivalent beam dispersions/hpbws('ceb')
         scaling:
             constant ('const')
             frequency ('frequency')
@@ -2141,6 +2128,8 @@ class Beach:
             if self._verb:
                 warnings.warn('Failing to initialize bstats. Returning.')
             return
+
+        print('genbstats: generating statistics')
         
         para = copy.deepcopy(self._parameter)
         scal = copy.deepcopy(self._scaling)
@@ -2163,7 +2152,7 @@ class Beach:
         #samp = self._sample[:]
 
         if 'all' in para:
-            para = ['bmaj', 'bmin', 'bpa']
+            para = ['bmaj', 'bmin', 'bpa', 'bsa', 'ceb']
         if 'all' in scal:
             scal = ['constant', 'frequency']
         if 'all' in styp:
@@ -2187,8 +2176,8 @@ class Beach:
             return
 
         # This is needed later, map for parameters
-        parma = {'bmaj': 0, 'bmin': 1, 'bpa': 2}
-        
+        parma = {'bmaj': 0, 'bmin': 1, 'bpa': 2, 'bsa': 3, 'ceb': 4}
+
         # Now let's do it
 
         # get struct
@@ -2197,7 +2186,7 @@ class Beach:
             
             for sam in samp:
                 
-                collist = self._getcollist(sca, sam, False)
+                collist = self._getcollist(sca, sam)
 
                 if type(collist) == type(None):
                     if verb or self._verb:
@@ -2232,6 +2221,21 @@ class Beach:
                         self._bstats[par][sca][sty][sam] = stats[:,parma[par]]
                         #print('self._bstats[', par, '][', sty, '][', sam,'] =', self._bstats[par][sca][sty][sam])
 
+                        if sty != 'percents':
+                            print('Statistics Parameter: {}\n'.format(par)+\
+                                  'Scaling:              {}\n'.format(sca)+\
+                                  'Statistics:           {}\n'.format(sty)+\
+                                  'Sample:               {}'.format(sam))
+                            if sam == 'cube':
+                                for i in range(len(self._bstats[par][sca][sty][sam])):
+                                    print('  cube {}: {}'.format(i,self._bstats[par][sca][sty][sam][i]))
+                            if sam == 'chan':
+                                for i in range(self._bstats[par][sca][sty][sam].shape[0]):
+                                    print('  channel {}: {}'.format(i,self._bstats[par][sca][sty][sam][i]))
+                            if sam == 'total':
+                                print('  total: {}'.format(self._bstats[par][sca][sty][sam][0]))
+                            print()
+        print()
         # Cascade down
         if self._gentarget_exe:
             self.gentarget(verb = verb)
@@ -2249,9 +2253,9 @@ class Beach:
         kwargs is a dummy dict.
         """
         
-        output = np.empty((0, 3))
+        output = np.empty((0, 5))
         for array in parray:
-            output = np.append(output, np.amin(array, axis = 0).reshape((1,3,)),
+            output = np.append(output, np.amin(array, axis = 0).reshape((1,5,)),
                                axis = 0)
 
         return output
@@ -2269,9 +2273,9 @@ class Beach:
         kwargs is a dummy dict.
         """
         
-        output = np.empty((0, 3))
+        output = np.empty((0, 5))
         for array in parray:
-            output = np.append(output, np.amax(array, axis = 0).reshape((1,3,)),
+            output = np.append(output, np.amax(array, axis = 0).reshape((1,5,)),
                                axis = 0)
 
         return output
@@ -2288,9 +2292,9 @@ class Beach:
         first axis for each of the m components of the ndarray.
         kwargs is a dummy dict.
         """
-        output = np.empty((0, 3))
+        output = np.empty((0, 5))
         for array in parray:
-            output = np.append(output, np.mean(array, axis = 0).reshape((1,3,)),
+            output = np.append(output, np.mean(array, axis = 0).reshape((1,5,)),
                                axis = 0)
 
         return output
@@ -2310,7 +2314,7 @@ class Beach:
         kwargs is a dummy dict.
         """
 
-        output = np.empty((0, 3))
+        output = np.empty((0, 5))
         for array in parray:
             
             # Make sure that there is no error if there is only one
@@ -2320,7 +2324,7 @@ class Beach:
                 dof = 1.
         
             output = np.append(output, np.std(array, axis = 0,
-                                      ddof = dof).reshape((1,3,)), axis = 0)
+                                      ddof = dof).reshape((1,5,)), axis = 0)
 
         return output
     
@@ -2337,9 +2341,9 @@ class Beach:
         kwargs is a dummy dict.
         """
         
-        output = np.empty((0, 3))
+        output = np.empty((0, 5))
         for array in parray:
-            output = np.append(output, np.median(array, axis = 0).reshape((1,3,)),
+            output = np.append(output, np.median(array, axis = 0).reshape((1,5,)),
                                axis = 0)
 
         return output
@@ -2359,10 +2363,10 @@ class Beach:
         kwargs is a dummy dict.
         """
         
-        output = np.empty((0, 3))
+        output = np.empty((0, 5))
         for array in parray:
             output = np.append(output, stats.median_abs_deviation(
-                array, axis = 0, scale = 1.).reshape((1,3,)), axis = 0)
+                array, axis = 0, scale = 1.).reshape((1,5,)), axis = 0)
 
         return output
 
@@ -2380,10 +2384,10 @@ class Beach:
         kwargs is a dummy dict.
         """
         
-        output = np.empty((0, 3))
+        output = np.empty((0, 5))
         for array in parray:
             output = np.append(output, stats.median_abs_deviation(
-                array, axis = 0, scale = 'normal').reshape((1,3,)), axis = 0)
+                array, axis = 0, scale = 'normal').reshape((1,5,)), axis = 0)
 
         return output
 
@@ -2399,10 +2403,10 @@ class Beach:
         For each element of the list generates the perc percents
         along the first axis for each of the m components of the ndarray
         """
-        output = np.empty((0, 3))
+        output = np.empty((0, 5))
         for array in parray:
             output = np.append(output, np.percentile(
-                array, kwargs['percents'], axis = 0).reshape((1,3,)), axis = 0)
+                array, kwargs['percents'], axis = 0).reshape((1,5,)), axis = 0)
 
         return output
 
@@ -2421,10 +2425,10 @@ class Beach:
         kwargs is a dummy argument
         """
         
-        output = np.empty((0, 3))
+        output = np.empty((0, 5))
         for array in parray:
             output = np.append(
-                output, np.array([kwargs['percents']]).repeat(3).reshape((1,3,)),
+                output, np.array([kwargs['percents']]).repeat(5).reshape((1,5,)),
                 axis = 0)
 
         return output
@@ -2441,7 +2445,7 @@ class Beach:
         Just dump the input perc to the output
         """
         
-        output = np.empty((0, 3))
+        output = np.empty((0, 5))
         for array in parray:
 
             # Unit of this one does not matter
@@ -2470,9 +2474,11 @@ class Beach:
             bmaj = common_beam.major.to(u.degree).value
             bmin = common_beam.minor.to(u.degree).value
             bpa = common_beam.pa.to(u.degree).value
+            bsa = (2*np.pi/np.log(256))*bmaj*bmin
+            ceb = np.sqrt(bmaj*bmin)
             
             output = np.append(
-                output, np.array([bmaj, bmin, bpa]).reshape((1,3,)),
+                output, np.array([bmaj, bmin, bpa, bsa, ceb]).reshape((1,5,)),
                 axis = 0)
 
         return output
@@ -2629,7 +2635,8 @@ class Beach:
                       None, hist_sample = None, hist_scaling = None,
                       hist_overwrite = None, hist_n_per_bin = None, verb
                       = True):
-        """Generate a histogram
+        """
+        Generate a histogram
         
         Input:
         hist_plotname (str)   : Name of plot
@@ -2664,6 +2671,9 @@ class Beach:
         if type(self._hist_plotname) == type(None) and type(self._hist_interactive) == type(None):
             return
 
+        print('genhistoplots: generating diagnostic plots.')
+        print()
+
         plotname = self._hist_plotname
         intername = self._hist_interactive
         
@@ -2673,20 +2683,18 @@ class Beach:
             intername = self._hist_interactive+'.html'
 
         # Get the sample
-        collist = self._getcollist(self._hist_scaling, self._hist_sample, True)
+        collist = self._getcollist(self._hist_scaling, self._hist_sample)
 
         # Get as much statistics as possible
         stats = []
-        for para in ['bmaj', 'bmin', 'bpa']:
-            valdict = {}
-            for variable in ['minimum', 'maximum', 'average', 'stdev', 'median', 'mad', 'madstdev', 'percentile', 'percents', 'commonbeam']:
-                valdict[variable] = self._bstats[para][self._hist_scaling][variable][self._hist_sample]
-            stats += [valdict]
-            
-        fourtitles = ['BMAJ', 'BMIN', 'BPA', 'BSA']
-        fourunits = ['arcsec', 'arcsec', 'deg', 'sqarcsec']
+        fivepars = ['bmaj', 'bmin', 'bpa', 'bsa', 'ceb']            
+        fivetitles = ['BMAJ', 'BMIN', 'BPA', 'BSA', 'CEB']
+        fiveunits = ['arcsec', 'arcsec', 'deg', 'sqarcsec', 'arcsec']
+        fivescaling = [3600., 3600., 1., 3600*3600, 3600]
         children = []
         children2 = []
+        #print('Got here scaling, sample', self._hist_scaling, self._hist_sample)
+        #print('Got here stats intern:', self._bstats['bmaj']['constant']['average']['chan'])
         for i in range(len(collist)):
             k = len('{:d}'.format(len(collist)-1))
             
@@ -2701,44 +2709,128 @@ class Beach:
                     warnings.warn('hist_sample not properly defined. Not generating histogram.')
                 return              
 
-            fourhists = [
-                np.histogram(collist[i][:,0]*3600., bins=-(-collist[i][:,0].size//self._hist_n_per_bin)),
-                np.histogram(collist[i][:,1]*3600., bins=-(-collist[i][:,0].size//self._hist_n_per_bin)),
-                np.histogram(collist[i][:,2], bins=-(-collist[i][:,0].size//self._hist_n_per_bin)),
-                np.histogram(collist[i][:,3]*3600.*3600., bins=-(-collist[i][:,0].size//self._hist_n_per_bin))
+            bins = -(-collist[i][:,0].size//self._hist_n_per_bin)
+            fivehists = [
+                np.histogram(collist[i][:,0]*3600., bins = bins),
+                np.histogram(collist[i][:,1]*3600., bins = bins),
+                np.histogram(collist[i][:,2], bins = bins),
+                np.histogram(collist[i][:,3]*3600.*3600., bins = bins),
+                np.histogram(collist[i][:,4]*3600., bins = bins)                
             ]
             r = []
-            
-            # Now get the available properties
-            minimum = 0
-            maximum = 0
-            taverage = 0
-            tstdev   = 0
-            median  = 0
-            mad     = 0
-            madstdev = 0
-            percentile = 0
-            percents = 0
-            commonbeam = 0
-            
-            for j in range(4):
+                        
+            for j in range(5):
                 
                 # Get the stats if available
-                r += [ bokeh_plotting.figure(tools='pan,box_zoom,wheel_zoom,reset,save',
-                                             background_fill_color='#fafafa', x_axis_label='{:s} ({:s})'.format(fourtitles[j], fourunits[j]), y_axis_label = 'Counts') ]
+                r += [ bokeh_plotting.figure(tools=['pan','box_zoom','wheel_zoom','reset,save'],
+                                             background_fill_color='#fafafa', x_axis_label='{:s} ({:s})'.format(fivetitles[j], fiveunits[j]), y_axis_label = 'Counts') ]
                 r[-1].plot_height = 300
                 r[-1].plot_width = 300
-                r[-1].quad(top=fourhists[j][0], bottom=0, left=fourhists[j][1][:-1], right=fourhists[j][1][1:],
-                           fill_color='navy', line_color='white', alpha=0.5)
-                #r[-1].line(x, pdf, line_color='#ff8888', line_width=4, alpha=0.7, legend_label='PDF')
                 r[-1].y_range.start = 0
-                #r[-1].legend.location = 'center_right'
+
+                # Histogram
+                r[-1].quad(top=fivehists[j][0], bottom=0, left=fivehists[j][1][:-1], right=fivehists[j][1][1:],
+                           fill_color='navy', line_color='white', alpha=0.5)
+
+                # Gaussian descriptors
+                avgaux = np.linspace(fivehists[j][1][0], fivehists[j][1][-1], 200)
+                amplitude = float(len(collist))/bins
+                average = self._bstats[fivepars[j]][self._hist_scaling]['average'][self._hist_sample][i]*fivescaling[j]
+                stdev = self._bstats[fivepars[j]][self._hist_scaling]['stdev'][self._hist_sample][i]*fivescaling[j]
+                amplitudeave = collist[i][:,0].size*(fivehists[j][1][-1]-fivehists[j][1][0])/(np.sqrt(2.*np.pi)*stdev*bins)
+
+                # Plot average and stdev properties if they exist
+                if np.isfinite(average) and np.isfinite(stdev):
+                    # Calculate Gaussian
+                    avgauy = self._gaussian(avgaux, average, amplitudeave, stdev)
+
+                    # Add Gaussian to the plot
+                    gaussline = r[-1].line(avgaux, avgauy, line_color='#ff6666', line_width=4, alpha=0.7, legend_label='Av')
+                    #r[-1].add_tools(bokeh_models.HoverTool(tooltips="""<font size-"3">Gaussian from<br>rms and stdev<br>$x $y</font>""", renderers=[gaussline], mode='vline'))
+                    r[-1].add_tools(bokeh_models.HoverTool(tooltips="""<font size-"3">Gaussian from<br>rms and stdev<br>$x $y</font>""", renderers=[gaussline]))
+
+                    # Add lines representing average and stdev                       
+                    gaussaverage = r[-1].line([average,average],[0,amplitudeave], line_color='#ff6666', line_width=4, alpha=0.7, legend_label='Av')
+                    r[-1].add_tools(bokeh_models.HoverTool(tooltips=[('average', '{:.1f}'.format(average))], attachment='right', renderers=[gaussaverage]))
+
+                    # To avoid funny looking plots
+                    avmst = average-stdev
+                    if avgaux[0] > average-stdev:
+                        avmst = avgaux[0]
+                    avpst = average+stdev
+                    if avgaux[-1] < average+stdev:
+                        avpst = avgaux[-1]
+                    gaussstdev = r[-1].line([avmst,avpst],[self._gaussian(average-stdev, average, amplitudeave, stdev),self._gaussian(average+stdev, average, amplitudeave, stdev)], line_color='#ff6666', line_width=4, alpha=0.7, legend_label='Av')
+                    r[-1].add_tools(bokeh_models.HoverTool(tooltips=[('stdev', '{:.1f}'.format(stdev))], attachment='right', renderers=[gaussstdev]))
+                    
+                # Gaussian from mad around median
+
+                # Gaussian descriptors
+                average = self._bstats[fivepars[j]][self._hist_scaling]['median'][self._hist_sample][i]*fivescaling[j]
+                stdev = self._bstats[fivepars[j]][self._hist_scaling]['madstdev'][self._hist_sample][i]*fivescaling[j]
+                amplitudemed = collist[i][:,0].size*(fivehists[j][1][-1]-fivehists[j][1][0])/(np.sqrt(2.*np.pi)*stdev*bins)
+
+                # Plot average and stdev properties if they exist
+                if np.isfinite(average) and np.isfinite(stdev):
+                    # Calculate Gaussian
+                    avgauy = self._gaussian(avgaux, average, amplitudemed, stdev)
+
+                    # Add Gaussian to the plot
+                    gaussline = r[-1].line(avgaux, avgauy, line_color='#66ffff', line_width=4, alpha=0.7, legend_label='Med')
+                    #r[-1].add_tools(bokeh_models.HoverTool(tooltips="""<font size-"3">Gaussian from<br>rms and stdev<br>$x $y</font>""", renderers=[gaussline], mode='vline'))
+                    r[-1].add_tools(bokeh_models.HoverTool(tooltips="""<font size-"3">Gaussian from<br>rms and stdev<br>$x $y</font>""", renderers=[gaussline]))
+
+                    # Add lines representing average and stdev                       
+                    gaussaverage = r[-1].line([average,average],[0,amplitudemed], line_color='#66ffff', line_width=4, alpha=0.7, legend_label='Med')
+                    r[-1].add_tools(bokeh_models.HoverTool(tooltips=[('median', '{:.1f}'.format(average))], attachment='right', renderers=[gaussaverage]))
+
+                    # To avoid funny looking plots
+                    avmst = average-stdev
+                    if avgaux[0] > average-stdev:
+                        avmst = avgaux[0]
+                    avpst = average+stdev
+                    if avgaux[-1] < average+stdev:
+                        avpst = avgaux[-1]
+                    gaussstdev = r[-1].line([avmst,avpst],[self._gaussian(average-stdev, average, amplitudemed, stdev),self._gaussian(average+stdev, average, amplitudemed, stdev)], line_color='#66ffff', line_width=4, alpha=0.7, legend_label='Med')
+                    r[-1].add_tools(bokeh_models.HoverTool(tooltips=[('madstd', '{:.1f}'.format(stdev))], attachment='right', renderers=[gaussstdev]))
+
+                # Vertical line dimensions (not using Spans because they don't have legends)
+                #height = r[-1].__attr__
+                #print('height',height)
+
+                ymax = max(amplitudeave, amplitudemed, np.amax(fivehists[j][0]))
+                
+                # Min and max
+                minimum = self._bstats[fivepars[j]][self._hist_scaling]['minimum'][self._hist_sample][i]*fivescaling[j]
+                if np.isfinite(minimum):
+                    miniline = r[-1].line([minimum,minimum],[0,ymax], line_color='#ff66b3', line_width=4, alpha=0.7, legend_label='Minmax')
+                    r[-1].add_tools(bokeh_models.HoverTool(tooltips=[('minimum', '{:.1f}'.format(minimum))], attachment='right', renderers=[miniline]))
+                maximum = self._bstats[fivepars[j]][self._hist_scaling]['maximum'][self._hist_sample][i]*fivescaling[j]
+                if np.isfinite(maximum):
+                    maxiline = r[-1].line([maximum,maximum],[0,ymax], line_color='#ff66b3', line_width=4, alpha=0.7, legend_label='Minmax')
+                    r[-1].add_tools(bokeh_models.HoverTool(tooltips=[('maximum', '{:.1f}'.format(maximum))], attachment='left', renderers=[maxiline]))
+
+                # Percentile
+                perc = self._bstats[fivepars[j]][self._hist_scaling]['percentile'][self._hist_sample][i]*fivescaling[j]
+                percent = self._bstats[fivepars[j]][self._hist_scaling]['percents'][self._hist_sample][i]
+                if np.isfinite(perc) and np.isfinite(percent):
+                    percline = r[-1].line([perc,perc],[0,ymax], line_color='#ffb366', line_width=4, alpha=0.7, legend_label='Perc')
+                    r[-1].add_tools(bokeh_models.HoverTool(tooltips=[('{}% percentile'.format(percent), '{:.1f}'.format(perc))], attachment='left', renderers=[percline]))
+                
+                # Add possibility to toggle graphs and lines
+                r[-1].legend.click_policy="hide"
+
+                # Common beam
+                common = self._bstats[fivepars[j]][self._hist_scaling]['commonbeam'][self._hist_sample][i]*fivescaling[j]
+                if np.isfinite(common):
+                    commonline = r[-1].line([common,common],[0,ymax], line_color='#66ffb3', line_width=4, alpha=0.7, legend_label='Common')
+                    r[-1].add_tools(bokeh_models.HoverTool(tooltips=[('common beam', '{:.1f}'.format(common))], attachment='right', renderers=[commonline]))
 
             children += [bokeh_models.widgets.markups.Div(text=titlestring, style={'font-size': '125%', 'font-family': 'bf', 'color': 'black'})]
-            children += [bokeh_plotting.gridplot([[r[0], r[1], r[2], r[3]]])]
+            children += [bokeh_plotting.gridplot([[r[0], r[1], r[2], r[3], r[4]]])]
             
             children2 += [bokeh_models.widgets.markups.Div(text=titlestring, style={'font-size': '125%', 'font-family': 'bf', 'color': 'black'})]
-            children2 += [bokeh_plotting.gridplot([[r[0], r[1], r[2], r[3]]], toolbar_location=None)]
+            children2 += [bokeh_plotting.gridplot([[r[0], r[1], r[2], r[3], r[4]]], toolbar_location=None)]
             
         q = bokeh_layouts.column(children=children)
         q2 = bokeh_layouts.column(children=children2)
@@ -2850,6 +2942,10 @@ class Beach:
             if verb or self._verb:
                 warnings.warn('Failed to generate bstats. Not generating target.')
             return
+
+        print('gentarget: generating target beam properties')
+        print()
+        
         tar_bmaj_inter = self._getar(self._tar_bmaj_inter, verb = self._verb)
         tar_bmaj_slope = self._getar(self._tar_bmaj_slope, verb = self._verb)
         tar_bmaj_absc  = self._getar(self._tar_bmaj_absc, verb = self._verb)
@@ -2984,7 +3080,9 @@ class Beach:
             return
 
         # After this marginal verification, we continue
-
+        print('gentrans: applying beams')
+        print()
+        
         # Open, reconvolve, copy
         for i in range(len(cuben)):
             incubus = fits.open(cuben[i])
