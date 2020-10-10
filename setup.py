@@ -12,7 +12,8 @@ requirements = [
     'scipy',
     'astropy',
     'radio_beam',
-    'pyfftw'
+    'pyfftw',
+    'bokeh',
 ]
 
 PACKAGE_NAME = 'equolver'
