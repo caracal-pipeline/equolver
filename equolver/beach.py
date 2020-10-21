@@ -56,8 +56,8 @@ class Beach:
                        tar_bpa_absc =  0.0,
                        tar_scaling = 'frequency', genbstats_exe = True,
                        gentarget_exe = True,
-                       gentrans_exe = True, tra_fitsnames = None,
-                       tra_overwrite = False, 
+                       gentrans_exe = True, tra_modelnames = None, tra_fitsnames = None,
+                       tra_mode = 'mask', tra_tol = 2, tra_overwrite = False, 
                        tra_commonbeam = True, tra_indibeam = True,
                        threads = 1, verb = False):
         """Private instance variables:
@@ -153,7 +153,8 @@ class Beach:
         if self._gentarget_exe:
             self.gentarget(verb = self._verb)
             
-        for para in [ 'gentrans_exe', 'tra_fitsnames',
+        for para in [ 'gentrans_exe', 'tra_modelnames',
+                      'tra_fitsnames', 'tra_mode', 'tra_tol',
                       'tra_overwrite', 'tra_commonbeam',
                       'tra_indibeam']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
@@ -226,7 +227,10 @@ class Beach:
         # bmaj, bmin, sin pa, cos pa, nu
         self._binfo_target = None
 
+        self._tra_modelnames = None
         self._tra_fitsnames = None
+        self._tra_mode = None
+        self._tra_tol = None
         self._tra_overwrite = None
         self._tra_commonbeam = None
         self._tra_indibeam = None
@@ -1079,19 +1083,85 @@ class Beach:
         """
         return self._tra_fitsnames
 
-    @gentrans_exe.setter
-    def gentrans_exe(self, value):
+    @tra_fitsnames.setter
+    def tra_fitsnames(self, value):
         """
-        Set gentrans_exe
+        Set tra_fitsnames
         """
         self._tra_fitsnames = copy.deepcopy(value)
         if self._gentrans_exe:
             self.gentrans(verb = False)
         return
 
-    @gentrans_exe.deleter
+    @tra_fitsnames.deleter
     def tra_fitsnames(self):
         self._tra_fitsnames = None
+        return
+
+    @property
+    def tra_modelnames(self):
+        """
+        Return a copy of _tra_modelnames
+        """
+        return self._tra_modelnames
+
+    @tra_modelnames.setter
+    def tra_modelnames(self, value):
+        """
+        Set tra_modelnames
+        """
+        self._tra_modelnames = copy.deepcopy(value)
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @tra_modelnames.deleter
+    def tra_modelnames(self):
+        self._tra_modelnames = None
+        return
+
+    @property
+    def tra_mode(self):
+        """
+        Return a copy of _tra_mode
+        """
+        return self._tra_mode
+
+    @tra_mode.setter
+    def tra_mode(self, value):
+        """
+        Set tra_mode
+        """
+        self._tra_mode = copy.deepcopy(value)
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @tra_mode.deleter
+    def tra_mode(self):
+        self._tra_mode = 'mask'
+        return
+
+    @property
+    def tra_tol(self):
+        """
+        Return a copy of _tra_tol
+        """
+        return self._tra_tol
+
+    @tra_tol.setter
+    def tra_tol(self, value):
+        """
+        Set tra_tol
+        """
+        self._tra_tol = copy.deepcopy(value)
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @tra_tol.deleter
+    def tra_tol(self):
+        self._tra_tol = 2.
         return
 
     @property
@@ -3005,9 +3075,11 @@ class Beach:
 
         return
 
-    def _initgentransvar(self, tra_fitsnames = None, tra_overwrite =
-                         None, tra_commonbeam = None, tra_indibeam =
-                         None, threads = None, verb = None):
+    def _initgentransvar(self, tra_modelnames = None, tra_fitsnames =
+                         None, tra_mode = None, tra_tol = None,
+                         tra_commonbeam = None, tra_indibeam = None,
+                         tra_overwrite = None, threads = None, verb =
+                         True):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -3018,30 +3090,71 @@ class Beach:
         for param in paras.keys():
             if type(paras[param]) != type(None):
                 self.__dict__['_'+param] = copy.deepcopy(paras[param])
-            else:
-                if self.__dict__['_'+param] == None:
-                    if verb or self._verb:
-                        warnings.warn('Parameter {} is not defined.'.format(param))
-                    output = True
+        paras.pop('tra_modelnames')
+        for param in paras.keys():
+            if self.__dict__['_'+param] == None:
+                if verb or self._verb:
+                    warnings.warn('Parameter {} is not defined.'.format(param))
+                output = True
         return output
             
-    def gentrans(self, tra_fitsnames = None, tra_overwrite = None,
-                       tra_commonbeam = None, tra_indibeam = None,
-                       threads = None, verb = True):
-        """
-        (De-)convolve input data cubes or images to target beam shapes
+    def gentrans(self, tra_modelnames = None, tra_fitsnames = None,
+                       tra_mode = None, tra_tol = None, tra_commonbeam = None,
+                       tra_indibeam = None, tra_overwrite = None, threads = None, verb = True):
+        """(De-)convolve input data cubes or images to target beam shapes
 
         Input:
-        tra_fitsnames (str or list of str): Output fits file names
-        tra_overwrite (bool)               : Overwrite output if already
-                                         existent (True: yes)?
+        tra_modelnames (str or list of str): Input fits file names, 
+                                             containing the models
+        tra_fitsnames (str or list of str) : Output fits file names
+        tra_mode (str)                     : 'scale', 'mask', 
+                                             'hybrid', 'max'
+        tra_tol (float)                    : tolerance to determine if
+                                             convolution failed
+        tra_commonbeam (bool)              : Generate common (average)
+                                             beam information in 
+                                             header
+        tra_indibeam (bool)                : Generate individual beam 
+                                             information in header
+        tra_overwrite (bool)               : Overwrite output if
+                                             already existent
+                                             (True: yes)?
+        threads (bool)                     : Number of threads
 
         Serially opens all cubes (images) listed in inputnames and
         generates cubes (De-)convolved to the resolution as listed in
-        the target structure.
+        the target structure. It then convolves all cubes listed in
+        tra_modelnames with the respective Gaussians and adds those to
+        the output. The number of cubes and the dimensionality of the
+        cubes must be identical to the one of the input cubes if not
+        None. 
+
+        A (de-)convolution is declared a success or a failure by
+        comparing the sum of the inner quarter in a plane divided by
+        the beam. If the ratio of the larger sum divided by the
+        smaller sum is larger than tra_tol, the (de-)convolution
+        has failed.
+
+        The mode of the deconvolution is determined by parameter
+        tra_mode as follows:
+          
+          'scale': Do not convolve but scale the intensity to the
+          target beam (divide by original beam solid angle and
+          multiply with target beam solid angle.)
+
+          'mask': (De-)convolve and mask channel in the output if the
+          deconvolution fails. 
+
+          'hybrid': Attempt to (de-) convolve the plane and fall back
+          to scale if the (de-)convolution fails.
+
+          'max': Attempt to (de-) convolve the plane. If that fails,
+          convolve along the beam minor axis to the target minor beam
+          if that is larger than the original. Then scale.
 
         """
-        stop = self._initgentransvar(tra_fitsnames = tra_fitsnames,
+        stop = self._initgentransvar(tra_modelnames = tra_modelnames,
+                                     tra_fitsnames = tra_fitsnames,
                                      tra_overwrite = tra_overwrite,
                                      tra_commonbeam = tra_commonbeam,
                                      tra_indibeam = tra_indibeam, verb
@@ -3056,13 +3169,16 @@ class Beach:
             if verb or self._verb:
                 warnings.warn('Target information not available, regenerating.')
             self.gentarget(verb = self._verb)
+            
         if type(self._binfo_target) == type(None):
             if verb or self._verb:
                 warnings.warn('Failed to generate target properties.'+ \
                               'Not generating output.')
             return
 
-        # Also check if tra_fitsnames have the same type and number as inputnames
+        # Also check if tra_fitsnames have the same type and number as inputnames,
+        # same for tra_modelnames
+        
         if type(self._tra_fitsnames) == type(''):
             transn = [self._tra_fitsnames]
         else:
@@ -3073,11 +3189,24 @@ class Beach:
         else:
             cuben = self._cubenames
 
+        if type(self._tra_modelnames) == type(''):
+            modeln = [self._tra_modelnames]
+        else:
+            modeln = self._tra_modelnames
+
         if len(transn) != len(cuben):
             if verb or self._verb:
                 warnings.warn('Number of input names not matching number of'+ \
                               'output data sets. Not generating output data.')
             return
+
+        if type(modeln) != type(None): 
+            if len(modeln) != len(cuben):
+                if verb or self._verb:
+                    warnings.warn('Number of input names not matching number of'+ \
+                                  'output data sets. Not generating output data.')
+                return
+            
 
         # After this marginal verification, we continue
         print('gentrans: applying beams')
@@ -3088,6 +3217,7 @@ class Beach:
             incubus = fits.open(cuben[i])
             incubus_image = incubus[0].data.astype('float'+'{:d}'.format(incubus[0].data.itemsize*8))
             orishape = incubus_image.shape
+
             #incubus_image = incubus_image.reshape((incubus[0].header['NAXIS1'],
             #                             incubus[0].header['NAXIS2'],
             #                             len(self._binfo_input[i][:,0])))
@@ -3095,6 +3225,8 @@ class Beach:
                 incubus_image = np.squeeze(incubus_image)
             if incubus_image.ndim == 2:
                 incubus_image = incubus_image.reshape((1, incubus_image.shape[0], incubus_image.shape[1]))
+
+                
             # Make a copy
             outcubus_image = incubus_image.copy()*0.+np.nan
             
@@ -3107,8 +3239,33 @@ class Beach:
                 self._reconvolve(originplane, targetplane, originbeam,
                                  targetbeam, threads = self._threads)
 
-            # Replace incubus with outcubus and write out
-            incubus[0].data[:] = outcubus_image.astype(incubus[0].data.dtype)
+            if type(modeln) != type(None):
+                print('Got here: ge')
+                inmodel = fits.open(modeln[i])
+                inmodel_image = inmodel[0].data.astype('float'+'{:d}'.format(inmodel[0].data.itemsize*8))
+                modelshape = inmodel_image.shape
+                if inmodel_image.ndim > 3:
+                    inmodel_image = np.squeeze(inmodel_image)
+                if inmodel_image.ndim == 2:
+                    inmodel_image = inmodel_image.reshape((1, inmodel_image.shape[0], inmodel_image.shape[1]))
+                outmodel_image = inmodel_image.copy()*0.+np.nan
+                
+                originbeam = [0.,0.,0.,0.,1.]
+                for plane in range(incubus_image.shape[0]):
+                    print('Processing {:s} plane {:d}'.format(cuben[i],plane))
+                    targetbeam = self._binfo_target[i][plane,:]
+                    originplane = inmodel_image[plane,:,:]
+                    targetplane = outmodel_image[plane,:,:]
+                    self._reconvolve(originplane, targetplane, originbeam,
+                                     targetbeam, threads = self._threads)
+                    
+                # Replace incubus with outcubus and write out
+                incubus[0].data[:] = outcubus_image.astype(incubus[0].data.dtype)+\
+                    outmodel_image.astype(incubus[0].data.dtype)
+                
+            else:
+                # Replace incubus with outcubus and write out
+                incubus[0].data[:] = outcubus_image.astype(incubus[0].data.dtype)
 
             if self._tra_commonbeam:
                 if self._tar_scaling == 'frequency':
@@ -3218,11 +3375,11 @@ class Beach:
         Calculates the product of four planar quasi-Gaussians
 
             P = amplitude_maj_a*amplitude_maj_b*
-                signum_maj_a/2*(x0a/dispersion_maj_a)+
-                signum_min_a/2*(x1a/dispersion_min_a)+
+                exp(signum_maj_a/2*(x0a/dispersion_maj_a)+
+                signum_min_a/2*(x1a/dispersion_min_a))*
                 amplitude_min_a*amplitude_min_b*
-                signum_maj_b/2*(x0b/dispersion_maj_b)+
-                signum_min_b/2*(x1b/dispersion_min_b)
+                exp(signum_maj_b/2*(x0b/dispersion_maj_b)+
+                signum_min_b/2*(x1b/dispersion_min_b))
                 
         where
             x1a =  cos(pa_a)*x1+sin(pa_a)*x0
@@ -3889,11 +4046,13 @@ class Beach:
         targetplane[:] = ifft()
         return
 
-    def createstcubes(self, gauprops = [], outcubi = [], naxis = 4, naxis1 = 257, naxis2 = 513, pixelsize = 8.3333335E-04, ctype3 = 'VRAD', channelwidth = 5000, cellscal = None, restfreq = None, bmaj = None, bmin = None, bpa = None, noputinheader = [], overwrite = True):
+    def createstcubes(self, mode = 'gauss', gauprops = [], outcubi = [], naxis = 4, naxis1 = 257, naxis2 = 513, pixelsize = 8.3333335E-04, ctype3 = 'VRAD', channelwidth = 5000, cellscal = None, restfreq = None, bmaj = None, bmin = None, bpa = None, noputinheader = [], overwrite = True):
         """Create a set of cubes to test beach
 
         Input:
         gauprops (list of ndarrays)   : Properties of Gaussians generated
+        mode (str)                    : Produce Gaussians ('gauss') or point
+                                        sources ('point')
         outcubi (list of str)         : Names of output cubes
         naxis  (int)                  : Number of axes
         naxis1 (int)                  : Size of cubes axis 1
@@ -3916,34 +4075,39 @@ class Beach:
         cubes generated. The number of list elements is the number of
         cubes produced. Their names are listed in outcubi (which has
         to have as many elements as gauprops). The method produces
-        cubes with one Gaussian in each plane. Each element of
-        gauprops is an 2D ndarray with size (planes, 6), where planes
-        is the number of planes, and the columns denote in that order,
-        central position x in pixels (starting at 0), central position
-        in y in pixels (starting at 0), amplitude, beam major HPBW in
-        pixels, beam minor HPBW in pixels, beam position angle. Each
-        cube has the same number naxis of axes, RA, DEC, VRAD (if
-        naxis > 2), STOKES (if naxis > 3). If naxis < 3 (we hence
-        produce not a cube but only one image), the elements of
-        gauprops should accordingly have only one row. The data type
-        is always intensity with the unit Jy/beam, the projection type
-        is always sine projection J2000, and the cubes are centered on
-        RA = 60 deg and DEC = -30 deg. The numbers of pixels in RA and
-        DEC direction is the same for all cubes, in ctype3 direction
-        it is determined by the number of rows in the corresponding
-        elements in gauprops, the length of the STOKES axis is always
-        1. The pixel size in RA and DEC direction is always the same
-        and determined by the parameter pixelsize. The type of the
-        third axis is determined by the keyword ctype3. The channel
-        width is the same for all cubes and determined by the
-        parameter channelwidth. The keyword cellscal ('CONSTANT' or
-        '1/F') can be set by the parameter cellscal (if set to None,
-        no keyword will appear in the header). Parameters restfreq
-        (rest frequency in Hz), bmaj (average beam major axis HPBW in
-        deg), bmin (average beam minor axis HPBW in deg), bpa (average
-        beam position angle in deg) set the corresponding keywords in
-        the headers. Choose '1420405745.51' for restfreq if you want
-        the HI rest frequency.
+        cubes with one Gaussian or one point source in each
+        plane. Each element of gauprops is an 2D ndarray with size
+        (planes, 6), where planes is the number of planes, and the
+        columns denote in that order, central position x in pixels
+        (starting at 0), central position in y in pixels (starting at
+        0), amplitude, beam major HPBW in pixels, beam minor HPBW in
+        pixels, beam position angle. If mode is 'point', then point
+        sources are generated (but the beam properties put into the
+        header), if it is 'gauss', then Gaussians are produced. Point
+        sources are always generated exactly on top of a pixel using
+        the nearest neighbour approach. Each cube has the same number
+        naxis of axes, RA, DEC, VRAD (if naxis > 2), STOKES (if naxis
+        > 3). If naxis < 3 (we hence produce not a cube but only one
+        image), the elements of gauprops should accordingly have only
+        one row. The data type is always intensity with the unit
+        Jy/beam, the projection type is always sine projection J2000,
+        and the cubes are centered on RA = 60 deg and DEC = -30
+        deg. The numbers of pixels in RA and DEC direction is the same
+        for all cubes, in ctype3 direction it is determined by the
+        number of rows in the corresponding elements in gauprops, the
+        length of the STOKES axis is always 1. The pixel size in RA
+        and DEC direction is always the same and determined by the
+        parameter pixelsize. The type of the third axis is determined
+        by the keyword ctype3. The channel width is the same for all
+        cubes and determined by the parameter channelwidth. The
+        keyword cellscal ('CONSTANT' or '1/F') can be set by the
+        parameter cellscal (if set to None, no keyword will appear in
+        the header). Parameters restfreq (rest frequency in Hz), bmaj
+        (average beam major axis HPBW in deg), bmin (average beam
+        minor axis HPBW in deg), bpa (average beam position angle in
+        deg) set the corresponding keywords in the headers. Choose
+        '1420405745.51' for restfreq if you want the HI rest
+        frequency.
 
         For each Gaussian generated with gauprops, the keywords BMAJi,
         BMINi, BPAi are generated in the header with the measures as
@@ -4024,25 +4188,31 @@ class Beach:
             if type(bpa) != type(None):
                 hdu[0].header['BPA'] = bpa
 
-            # Generate Gaussians and put their properties in header
+            # Generate Gaussians or point sources and put properties in header
+
             for j in range(gauprops[i].shape[0]):
-                darray = self._gaussian_2dp( naxis1 = naxis1,
-                                             naxis2 = naxis2, cdelt1 =
-                                             1., cdelt2 = 1.,
-                                             amplitude_maj_a =
-                                             gauprops[i][j,2],
-                                             dispersion_maj_a =
-                                             gauprops[i][j,3]/np.sqrt(np.log(256.)),
-                                             signum_maj_a = -1,
-                                             amplitude_min_a = 1.,
-                                             dispersion_min_a =
-                                             gauprops[i][j,4]/np.sqrt(np.log(256.)),
-                                             signum_min_a = -1, pa_a =
-                                             np.pi*gauprops[i][j,5]/180.,
-                                             dtype = target.dtype,
-                                             centering =
-                                             [gauprops[i][j,0],gauprops[i][j,1]],
-                                             forreal = False).astype(hdu[0].data.dtype)
+                if mode == 'gauss':
+                    darray = self._gaussian_2dp( naxis1 = naxis1,
+                                                 naxis2 = naxis2, cdelt1 =
+                                                 1., cdelt2 = 1.,
+                                                 amplitude_maj_a =
+                                                 gauprops[i][j,2],
+                                                 dispersion_maj_a =
+                                                 gauprops[i][j,3]/np.sqrt(np.log(256.)),
+                                                 signum_maj_a = -1,
+                                                 amplitude_min_a = 1.,
+                                                 dispersion_min_a =
+                                                 gauprops[i][j,4]/np.sqrt(np.log(256.)),
+                                                 signum_min_a = -1, pa_a =
+                                                 np.pi*gauprops[i][j,5]/180.,
+                                                 dtype = target.dtype,
+                                                 centering =
+                                                 [gauprops[i][j,0],gauprops[i][j,1]],
+                                                 forreal = False).astype(hdu[0].data.dtype)
+                else:
+                    darray = np.zeros((naxis2,naxis1), dtype = target.dtype)
+                    darray[int(gauprops[i][j,1]),int(gauprops[i][j,0])] = gauprops[i][j,2]
+                    
                 if naxis == 2:
                     hdu[0].data[:] = darray.astype(hdu[0].data.dtype)
                 if naxis == 3:
@@ -4062,6 +4232,7 @@ class Beach:
                         
             
             hdu.writeto(outcubi[i], overwrite = overwrite)
+            
 
 def testplot():
     # Log-Normal Distribution
@@ -4213,6 +4384,7 @@ if __name__ == '__main__':
     cinc = 0
     
     gauprops = []
+    poiprops = []
     
     # 2 cubes
     for i in range(2):
@@ -4225,6 +4397,12 @@ if __name__ == '__main__':
             planar[j, 4] = bmin0+(i*naxis3+j)*binc
             planar[j, 5] = bpa0+(i*naxis3+j)*cinc
         gauprops.append(planar)
+        planir = planar.copy()
+        for j in range(naxis3):
+            planir[j, 0] = naxis1//2-((i+1)*naxis3+j)*pinc
+            planir[j, 1] = naxis2//2-((i+1)*naxis3+j)*pinc
+            planir[j, 2] = amp0+(i*naxis3+j)*ainc
+        poiprops.append(planir)
         
     print()
     print('########################')
@@ -4260,19 +4438,24 @@ if __name__ == '__main__':
     print()
 
     incubi = ['test2_incubus1.fits', 'test2_incubus2.fits']
+    pincubi = ['test2_pincubus1.fits', 'test2_pincubus2.fits']
     Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
     print('Created input cubes {:s} and {:s}'.format(incubi[0], incubi[1]))
-    printcubeinfo(incubi[0])
-    printcubeinfo(incubi[1])
+    Beach(verb = False).createstcubes(gauprops = poiprops, mode = 'point', outcubi = pincubi, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
+    print('Created input cubes {:s} and {:s}'.format(pincubi[0], pincubi[1]))
+#    printcubeinfo(incubi[0])
+#    printcubeinfo(incubi[1])
     outcubi = ['test2_outcubus1.fits', 'test2_outcubus2.fits']
 
     # This is just a preliminary exercise to create a parameter input interface
     params = { 'cubes': incubi,
-               'tra_fitsnames': outcubi
+               'tra_fitsnames': outcubi,
+               'tra_modelnames': pincubi
     }
-    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
-    printbeachconts(beach)
-    beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
+    print(params)
+#    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
+#    printbeachconts(beach)
+    beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_modelnames = params['tra_modelnames'], tra_overwrite = True)
     print()
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
@@ -4287,7 +4470,7 @@ if __name__ == '__main__':
     params = { 'cubes': incubi,
                'tra_fitsnames': outcubi
     }
-    Beach(cubenames = params['cubes'], tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
+#    Beach(cubenames = params['cubes'], tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
     print()
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
@@ -4299,19 +4482,19 @@ if __name__ == '__main__':
     gauprops[0] = gauprops[0][0,:].reshape((1,6))
     gauprops[1] = gauprops[1][0,:].reshape((1,6))
     incubi = ['test4_incubus1.fits', 'test4_incubus2.fits']
-    Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis = 2, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
+#    Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis = 2, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
     print('Created input cubes {:s} and {:s}'.format(incubi[0], incubi[1]))
-    printcubeinfo(incubi[0])
-    printcubeinfo(incubi[1])
+#    printcubeinfo(incubi[0])
+#    printcubeinfo(incubi[1])
     outcubi = ['test4_outcubus1.fits', 'test4_outcubus2.fits']
 
     # This is just a preliminary exercise to create a parameter input interface
     params = { 'cubes': incubi,
                'tra_fitsnames': outcubi
     }
-    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
-    printbeachconts(beach)
-    beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
+#    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
+#    printbeachconts(beach)
+#    beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
     print()
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
@@ -4323,6 +4506,7 @@ if __name__ == '__main__':
     print()
 
     # Now we need more cubes and more planes
+    
     # 20 planes
     naxis3 = 20
     
@@ -4336,9 +4520,11 @@ if __name__ == '__main__':
     cinc = 0.3 # Position angle increase
     
     gauprops = []
+    poiprops = []
     
     # 10 cubes
     incubi = []
+    pincubi = []
     outcubi = []
     for i in range(10):
         planar = np.zeros((naxis3,6))
@@ -4350,17 +4536,25 @@ if __name__ == '__main__':
             planar[j, 4] = (bmin0+(i*naxis3+j)*binc*(1+(i*naxis3+j)/8.))/2
             planar[j, 5] = bpa0+(i*naxis3+j)*cinc*(1+(i*naxis3+j)/6.)
         gauprops.append(planar)
+        for j in range(naxis3):
+            planar[j, 0] = naxis1//2-((i+1)*naxis3+j)*pinc
+            planar[j, 1] = naxis2//2-((i+1)*naxis3+j)*pinc
+            planar[j, 2] = amp0+(i*naxis3+j)*ainc
+        poiprops.append(planar)
+        
         incubi.append('test5_incubus_{:d}.fits'.format(i))
+        pincubi.append('test5_pincubus_{:d}.fits'.format(i))
         outcubi.append('test5_outcubus_{:d}.fits'.format(i))
         
-    Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis = 4, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
+#    Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis = 4, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
+#    Beach(verb = False).createstcubes(gauprops = poiprops, mode = 'point', outcubi = pincubi, naxis = 4, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
     params = { 'cubes': incubi,
                'tra_fitsnames': outcubi
     }
-    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
-    printbeachconts(beach)
-    beach.genhistoplots(hist_plotname='test5.png', hist_interactive='test5.html', hist_scaling = 'constant', hist_sample = 'chan', hist_n_per_bin = 2, hist_overwrite = True)
+#    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
+#    printbeachconts(beach)
+#    beach.genhistoplots(hist_plotname='test5.png', hist_interactive='test5.html', hist_scaling = 'constant', hist_sample = 'chan', hist_n_per_bin = 2, hist_overwrite = True)
     #beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
     print()
-    print('Created output cubes')
+    print('Created output plots')
     print()
