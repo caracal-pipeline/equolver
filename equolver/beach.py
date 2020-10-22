@@ -10,6 +10,7 @@ from astropy import wcs
 from astropy import units as u
 from kapteyn import wcs as kwcs
 import pyfftw
+import datetime
 
 #from bokeh.layouts import gridplot
 #from bokeh.plotting import figure, output_file, show
@@ -57,7 +58,8 @@ class Beach:
                        tar_scaling = 'frequency', genbstats_exe = True,
                        gentarget_exe = True,
                        gentrans_exe = True, tra_modelnames = None, tra_fitsnames = None,
-                       tra_mode = 'mask', tra_tol = 2, tra_overwrite = False, 
+                       tra_mode = 'mask', tra_hdmode = True, tra_tol = 2,
+                       tra_overwrite = False, 
                        tra_commonbeam = True, tra_indibeam = True,
                        threads = 1, verb = False):
         """Private instance variables:
@@ -82,31 +84,47 @@ class Beach:
         _binfo_input (list) : List of arrays of point spread func-
                               tion, in the order of headernames and
                               headers each array of size (chans, 8),
-                              where first column bmaj in deg, second
-                              column bmin in deg, third column bpa in
-                              deg, fourth column frequency in Hz,
-                              fifth column pixel size in deg, sixth
-                              column reference frequency divided by
-                              frequency, seventh column bmaj in deg
+                              where
+ 
+                              first column bmaj in deg, 
+                              
+                              second column bmin in deg
+                              
+                              third column bpa in deg
+                              
+                              fourth column frequency in Hz
+
+                              fifth column pixel size in deg, 
+
+                              sixth column reference frequency divided
+                              by frequency
+          
+                              seventh column bmaj in deg
                               scaled with frequency divided by the
-                              normalisation frequency, eighth column
-                              bmin in deg scaled with frequency
-                              divided by the normalisation frequency,
+                              normalisation frequency
+ 
+                              eighth column bmin in deg scaled with
+                              frequency divided by the normalisation
+                              frequency
+
                               ninth column beam solid angle
                               (2pi/ln(256))*first_column*second_columnn,
+
                               10th column beam solid angle at
                               normalisation frequency
                               (2pi/ln(256))*seventh_column*eighth_columnn
+
                               eleventh column HPBW of a circular
-                              Gaussian with BSA of column 9, twelfth
-                              column HPBW of a circular Gaussian with
-                              BSA of column 10. chans is the number
-                              of channels _binfo_pixel (list) :
-                              _binfo_input converted into pixel
-                              scaling using dispersion instead of HPBW
-                              _bstats (dict) : Dictionary containing
-                              all statistics _binfo_target (list) :
-                              Target beam properties
+                              Gaussian with BSA of column 9
+
+                              twelfth column HPBW of a circular
+                              Gaussian with BSA of column 10. chans is
+                              the number of channels _binfo_pixel
+                              (list) : _binfo_input converted into
+                              pixel scaling using dispersion instead
+                              of HPBW _bstats (dict) : Dictionary
+                              containing all statistics _binfo_target
+                              (list) : Target beam properties
 
         """
         self._initvars()
@@ -154,7 +172,7 @@ class Beach:
             self.gentarget(verb = self._verb)
             
         for para in [ 'gentrans_exe', 'tra_modelnames',
-                      'tra_fitsnames', 'tra_mode', 'tra_tol',
+                      'tra_fitsnames', 'tra_mode', 'tra_hdmode', 'tra_tol',
                       'tra_overwrite', 'tra_commonbeam',
                       'tra_indibeam']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
@@ -230,6 +248,7 @@ class Beach:
         self._tra_modelnames = None
         self._tra_fitsnames = None
         self._tra_mode = None
+        self._tra_hdmode = None
         self._tra_tol = None
         self._tra_overwrite = None
         self._tra_commonbeam = None
@@ -1140,6 +1159,28 @@ class Beach:
     @tra_mode.deleter
     def tra_mode(self):
         self._tra_mode = 'mask'
+        return
+
+    @property
+    def tra_hdmode(self):
+        """
+        Return a copy of _tra_hdmode
+        """
+        return self._tra_hdmode
+
+    @tra_hdmode.setter
+    def tra_hdmode(self, value):
+        """
+        Set tra_hdmode
+        """
+        self._tra_hdmode = copy.deepcopy(value)
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @tra_hdmode.deleter
+    def tra_hdmode(self):
+        self._tra_hdmode = True
         return
 
     @property
@@ -3076,10 +3117,10 @@ class Beach:
         return
 
     def _initgentransvar(self, tra_modelnames = None, tra_fitsnames =
-                         None, tra_mode = None, tra_tol = None,
-                         tra_commonbeam = None, tra_indibeam = None,
-                         tra_overwrite = None, threads = None, verb =
-                         True):
+                         None, tra_mode = None, tra_hdmode = None,
+                         tra_tol = None, tra_commonbeam = None,
+                         tra_indibeam = None, tra_overwrite = None,
+                         threads = None, verb = True):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -3099,8 +3140,10 @@ class Beach:
         return output
             
     def gentrans(self, tra_modelnames = None, tra_fitsnames = None,
-                       tra_mode = None, tra_tol = None, tra_commonbeam = None,
-                       tra_indibeam = None, tra_overwrite = None, threads = None, verb = True):
+                 tra_mode = None, tra_hdmode = None, tra_tol = None,
+                 tra_commonbeam = None, tra_indibeam = None,
+                 tra_indimode = None, tra_overwrite = None, threads =
+                 None, verb = True):
         """(De-)convolve input data cubes or images to target beam shapes
 
         Input:
@@ -3116,6 +3159,8 @@ class Beach:
                                              header
         tra_indibeam (bool)                : Generate individual beam 
                                              information in header
+        tra_hdmode (bool)                  : Generate information about
+                                             scaling/convolution in header
         tra_overwrite (bool)               : Overwrite output if
                                              already existent
                                              (True: yes)?
@@ -3152,9 +3197,17 @@ class Beach:
           convolve along the beam minor axis to the target minor beam
           if that is larger than the original. Then scale.
 
+        If tra_hdmode is set to True, a keyword 'EQMODE' with the
+        value of mode is added to the header. In addition, if EQMODE
+        is not scale or mask, any plane for which the first
+        convolution failed, is highlighted by the keyword-value pair
+        EQS_i = 'SCALE' or EQSC = 'HYBRID'. i in this context is the
+        plane number (Fortran/FITS style).
+
         """
         stop = self._initgentransvar(tra_modelnames = tra_modelnames,
                                      tra_fitsnames = tra_fitsnames,
+                                     tra_mode = tra_mode, tra_tol = tra_tol,
                                      tra_overwrite = tra_overwrite,
                                      tra_commonbeam = tra_commonbeam,
                                      tra_indibeam = tra_indibeam, verb
@@ -3207,6 +3260,12 @@ class Beach:
                                   'output data sets. Not generating output data.')
                 return
             
+        if not self._tra_mode in ['scale', 'mask', 'hybrid', 'max']: 
+            if verb or self._verb:
+                warnings.warn('Number of input names not matching number of'+ \
+                                  'output data sets. Not generating output data.')
+            return
+            
 
         # After this marginal verification, we continue
         print('gentrans: applying beams')
@@ -3229,6 +3288,8 @@ class Beach:
                 
             # Make a copy
             outcubus_image = incubus_image.copy()*0.+np.nan
+
+            planeinfo = {}
             
             for plane in range(incubus_image.shape[0]):
                 print('Processing {:s} plane {:d}'.format(cuben[i],plane))
@@ -3236,11 +3297,86 @@ class Beach:
                 targetbeam = self._binfo_target[i][plane,:]
                 originplane = incubus_image[plane,:,:]
                 targetplane = outcubus_image[plane,:,:]
-                self._reconvolve(originplane, targetplane, originbeam,
-                                 targetbeam, threads = self._threads)
+                if self._tra_mode == 'scale':
+
+                    # Scale by the area of the beam
+                    targetplane = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
+
+                else:
+                    
+                    # Attempt to convolve
+                    self._reconvolve(originplane, targetplane, originbeam,
+                                     targetbeam, threads = self._threads)
+
+                    failure = False
+                    
+                    # Assess success: one nan/inf pixel marks failure
+                    if np.isfinite(targetplane).astype(int).sum() < targetplane.size:
+                        failure = True
+                    else:
+                        # Asses success: the inner quarter of the image
+                        # should approximately show the same sum,
+                        # normalised by the beam size
+                        originflux = originplane[originplane.shape[0]//4:3*originplane.shape[0]//4,
+                                    originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])
+                        targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,
+                                    targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])
+                        failure = np.amax([originflux, targetflux])/np.amin([originflux, targetflux]) > self._tra_tol
+
+                    if failure:
+                        print('{:s} plane {:d}: failed to re-convolve'.format(cuben[i],plane))
+                        
+                        if self._tra_mode == 'mask':
+                            print('Masking')
+                            targetplane[:] = np.nan
+                            
+                        if self._tra_mode == 'hybrid':
+                            print('Scaling instead\n')
+                            targetplane = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
+                            planeinfo['EQS_{:d}'.format(plane+1)] = 'SCALE'
+                            targetplane[:] = np.nan
+                            
+                        if self._tra_mode == 'max':
+                            print('Using hybrid approach\n')
+
+                            # Target beam is smaller or oriented differentely than origin beam
+                            # Find out if bmin in targetbeam is larger than bmin in originbeam
+                            if targetbeam[1] > originbeam[1]:
+
+                                # Then we can go half way, we convolve to the same minor beam,
+                                # but not more
+                                self._reconvolve(originplane, targetplane, originbeam,
+                                                 [originbeam[0], targetbeam[1], originbeam[2]], threads = self._threads)
+
+                                # Check again
+                                if np.isfinite(targetplane).astype(int).sum() < targetplane.size:
+                                    failure_again = True
+                                else:
+                                    # Asses success: the inner quarter of the image
+                                    # should approximately show the same sum,
+                                    # normalised by the beam size
+                                    orginflux = originplane[originplane.shape[0]//4:3* originplane.shape[0]//4,
+                                                originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])
+                                    targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,
+                                                targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])
+                                    failure_again = np.amax([orginflux, targetflux])/np.amin([originflux, targetflux]) > self._tra_tol
+
+                                if failure_again:
+                                    print('{:s} plane {:d}: failed to re-convolve again'.format(cuben[i], plane))
+                                    print('Scaling instead\n')
+                                    
+                                    # If we failed again (just a safeguard), we scale only
+                                    targetplane = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
+                                    planeinfo['EQS_{:d}'.format(plane+1)] = 'SCALE'
+
+                                else:
+                                    print('Applying hybrid approach\n')
+                                    # If we succeeded we need to scale the rest
+                                    targetplane = targetplane*targetbeam[0]/originbeam[0]
+                                    planeinfo['EQS_{:d}'.format(plane+1)] = 'HYBRID'
+                        print('')
 
             if type(modeln) != type(None):
-                print('Got here: ge')
                 inmodel = fits.open(modeln[i])
                 inmodel_image = inmodel[0].data.astype('float'+'{:d}'.format(inmodel[0].data.itemsize*8))
                 modelshape = inmodel_image.shape
@@ -3267,6 +3403,11 @@ class Beach:
                 # Replace incubus with outcubus and write out
                 incubus[0].data[:] = outcubus_image.astype(incubus[0].data.dtype)
 
+            if self._tra_hdmode:
+                incubus[0].header['EQMODE'] = self._tra_mode
+                for key in planeinfo.keys():
+                    incubus[0].header[key] = planeinfo[key]
+                
             if self._tra_commonbeam:
                 if self._tar_scaling == 'frequency':
 
@@ -3305,6 +3446,12 @@ class Beach:
                     incubus[0].header['BMIN{:d}'.format(j+1)] = np.sqrt(np.log(256))*self._binfo_target[i][j,1]*\
                                     self._binfo_target[i][j,4]
                     incubus[0].header['BPA{:d}'.format(j+1)] = 180.*self._binfo_target[i][j,2]/np.pi
+
+            # Document occurrence of equolver in history
+            incubus[0].header['HISTORY'] = ''
+            incubus[0].header['HISTORY'] = '{:s} Generated by equolver'.format(datetime.datetime.now().strftime("%d-%b-%Y %H:%M:%S"))
+            incubus[0].header['HISTORY'] = 'See https://github.com/caracal-pipeline/equolver'
+            incubus[0].header['HISTORY'] = ''
 
             # Finally write and close cube
             incubus.writeto(self._tra_fitsnames[i], overwrite = self._tra_overwrite)
