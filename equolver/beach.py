@@ -27,18 +27,17 @@ class Beach:
     """
     HIFREQ = 1420405751.7667
 
-    def __init__(self, cubenames = None,
-                       bmaj = np.nan, bmaj_replace = False,
-                       bmin = np.nan, bmin_replace = False,
-                       bpa = np.nan, bpa_replace = False,
-                       restfreq = HIFREQ, restfreq_replace = False,
-                       normfreq = 1.4E9,
-                       parameter = 'all',
-                       scaling = 'all',
-                       #stype = ['average', 'stdev', 'commonbeam'],
-                       stype = 'all',
-                       sample = 'all', percents = 90,
-                       tolerance = 0.1, nsamps = 200, epsilon = 0.0005,
+    def __init__(self, inc_cubes = None,
+                       bin_bmaj = np.nan, bin_bmaj_replace = False,
+                       bin_bmin = np.nan, bin_bmin_replace = False,
+                       bin_bpa = np.nan, bin_bpa_replace = False,
+                       bin_restfreq = HIFREQ, bin_restfreq_replace = False,
+                       bin_normfreq = 1.4E9,
+                       bst_parameter = 'all',
+                       bst_scaling = 'all',
+                       bst_stype = 'all',
+                       bst_sample = 'all', bst_percents = 90,
+                       bst_tolerance = 0.1, bst_nsamps = 200, bst_epsilon = 0.0005,
                        hist_plotname = None, hist_interactive = None, 
                        hist_sample = 'total', hist_scaling = 'frequency',
                        hist_n_per_bin = 5, hist_overwrite = False,
@@ -62,19 +61,19 @@ class Beach:
         (multiple: None, a float, a list of floats, a numpy array, 
          or a list with numpy arrays)
 
-        _cubenames (list)     : Names of input cubes
+        _inc_cubes (list)     : Names of input cubes
         _headers (list)         : List of open header hdus
 
-        _bmaj     (multiple)  : Beam major axis default value(s)
-        _bmaj_replace (bool)  : Enforce usage of default values?
+        _bin_bmaj     (multiple)  : Beam major axis default value(s)
+        _bin_bmaj_replace (bool)  : Enforce usage of default values?
                                   (True = yes)
-        _bmin     (multiple)  : Beam minor axis default value(s)
-        _bmin_replace (bool)  : Enforce usage of default values?
+        _bin_bmin     (multiple)  : Beam minor axis default value(s)
+        _bin_bmin_replace (bool)  : Enforce usage of default values?
                               (True = yes)
         _bpa     (multiple)   : Beam position angle default value(s)
         _bpa_replace (bool)   : Enforce usage of default values? 
 
-        _restfreq (multiple)  : Rest frequency default value(s)
+        _bin_restfreq (multiple)  : Rest frequency default value(s)
         _bpa_replace (bool)   : Enforce usage of default values? 
 
         _binfo_input (list) : List of arrays of point spread func-
@@ -126,24 +125,29 @@ class Beach:
         self._initvars()
         self._verb = verb
         self._threads = threads
-        self.initheaders(cubenames = cubenames)
-        self._initbinfo_inputvar(bmaj = bmaj, bmaj_replace =
-                                 bmaj_replace, bmin = bmin,
-                                 bmin_replace = bmin_replace,
-                                 bpa = bpa, bpa_replace =
-                                 bpa_replace, restfreq =
-                                 restfreq, restfreq_replace =
-                                 restfreq_replace, verb =
-                                 self._verb)
+        self.genincubus(inc_cubes = inc_cubes)
+        #self._initbinfo_inputvar(bin_bmaj = bin_bmaj, bin_bmaj_replace =
+        #                         bin_bmaj_replace, bin_bmin = bin_bmin,
+        #                         bin_bmin_replace = bin_bmin_replace,
+        #                         bin_bpa = bin_bpa, bin_bpa_replace =
+        #                         bin_bpa_replace, bin_restfreq =
+        #                         bin_restfreq, bin_restfreq_replace =
+        #                         bin_restfreq_replace, verb =
+        #                         self._verb)
         
+        for para in ['bin_bmaj', 'bin_bmaj_replace', 'bin_bmin',
+                     'bin_bmin_replace', 'bin_bpa',
+                     'bin_bpa_replace', 'bin_restfreq',
+                     'bin_restfreq_replace']
+
         if genbstats_exe:
             self._genbstats_exe = True
 
         self.genbinfo(verb = self._verb)
-        self._normfreq = copy.deepcopy(normfreq)
+        self._bin_normfreq = copy.deepcopy(bin_normfreq)
 
-        for para in ['parameter', 'scaling', 'stype', 'sample',
-                     'percents', 'tolerance', 'nsamps', 'epsilon',
+        for para in ['bst_parameter', 'bst_scaling', 'bst_stype', 'bst_sample',
+                     'bst_percents', 'bst_tolerance', 'bst_nsamps', 'bst_epsilon',
                      'gentarget_exe']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
 
@@ -184,22 +188,22 @@ class Beach:
         """
 
         # Headers
-        self._cubenames = None
+        self._inc_cubes = None
         self._headers = None
 
         # Defaults
-        self._bmaj = None
-        self._bmaj_replace = False
-        self._bmin = None
-        self._bmin_replace = False
-        self._bpa = None
-        self._bpa_replace = False
-        self._restfreq = None
-        self._restfreq_replace = False
+        self._bin_bmaj = None
+        self._bin_bmaj_replace = False
+        self._bin_bmin = None
+        self._bin_bmin_replace = False
+        self._bin_bpa = None
+        self._bin_bpa_replace = False
+        self._bin_restfreq = None
+        self._bin_restfreq_replace = False
 
         # This is the normalisation for frequency-dependent beam
         # properties
-        self._normfreq = None
+        self._bin_normfreq = None
 
         # bmaj, bmin, pa, nu, pixelsize
         self._binfo_input = None
@@ -207,14 +211,14 @@ class Beach:
         # bmaj, bmin, sin pa, cos pa, nu
         self._binfo_pixel = None
 
-        self._parameter = None
-        self._scaling = None
-        self._stype = None
-        self._sample = None
-        self._percents = None
-        self._tolerance = None
-        self._nsamps = None
-        self._epsilon = None
+        self._bst_parameter = None
+        self._bst_scaling = None
+        self._bst_stype = None
+        self._bst_sample = None
+        self._bst_percents = None
+        self._bst_tolerance = None
+        self._bst_nsamps = None
+        self._bst_epsilon = None
 
         # Statistics
         self._bstats = None
@@ -256,24 +260,24 @@ class Beach:
         return
 
     @property
-    def cubenames(self):
+    def inc_cubes(self):
         """
-        Return a copy of cubenames
+        Return a copy of inc_cubes
         """
-        if type(self._cubenames) == type(None):
+        if type(self._inc_cubes) == type(None):
             return None
         return copy.deepcopy(self._binfo_input)
 
-    @cubenames.setter
-    def cubenames(self, value):
+    @inc_cubes.setter
+    def inc_cubes(self, value):
 
         # There is no use in letting the user change the cube names
         # but not changing the cubes, so this is enforced
-        self.initheaders(cubenames = value)
+        self.genincubus(inc_cubes = value)
         return
     
-    @cubenames.deleter
-    def cubenames(self, value):
+    @inc_cubes.deleter
+    def inc_cubes(self, value):
         self._resetheaders()
         
     @property
@@ -301,24 +305,24 @@ class Beach:
         return returnlist
     
     @property
-    def bmaj(self):
+    def bin_bmaj(self):
         """
-        Return a copy of bmaj
+        Return a copy of bin_bmaj
         """
-        return copy.deepcopy(self._bmaj)
+        return copy.deepcopy(self._bin_bmaj)
 
-    @bmaj.setter
-    def bmaj(self, value):
+    @bin_bmaj.setter
+    def bin_bmaj(self, value):
         """
-        Set bmaj
+        Set bin_bmaj
         """
-        self._bmaj = copy.deepcopy(value)
+        self._bin_bmaj = copy.deepcopy(value)
         self.genbinfo(verb = False)
         return
 
-    @bmaj.deleter
-    def bmaj(self, value):
-        self._bmaj = np.nan
+    @bin_bmaj.deleter
+    def bin_bmaj(self, value):
+        self._bin_bmaj = np.nan
         self._binfo_input = None
         self._binfo_pixel = None
         self._bstats = None
@@ -326,36 +330,36 @@ class Beach:
         return
         
     @property
-    def bmaj_replace(self):
-        return self._bmaj_replace
+    def bin_bmaj_replace(self):
+        return self._bin_bmaj_replace
 
-    @bmaj_replace.setter
-    def bmaj_replace(self, value):
-        self._bmaj_replace = value
+    @bin_bmaj_replace.setter
+    def bin_bmaj_replace(self, value):
+        self._bin_bmaj_replace = value
     
-    @bmaj_replace.deleter
-    def bmaj_replace(self, value):
-        self._bmaj_replace = False
+    @bin_bmaj_replace.deleter
+    def bin_bmaj_replace(self, value):
+        self._bin_bmaj_replace = False
 
     @property
-    def bmin(self):
+    def bin_bmin(self):
         """
-        Return a copy of bmin
+        Return a copy of bin_bmin
         """
-        return copy.deepcopy(self._bmin)
+        return copy.deepcopy(self._bin_bmin)
 
-    @bmin.setter
-    def bmin(self, value):
+    @bin_bmin.setter
+    def bin_bmin(self, value):
         """
-        Set bmin
+        Set bin_bmin
         """
-        self._bmin = copy.deepcopy(value)
+        self._bin_bmin = copy.deepcopy(value)
         self.genbinfo(verb = False)
         return
 
-    @bmin.deleter
-    def bmin(self, value):
-        self._bmin = np.nan
+    @bin_bmin.deleter
+    def bin_bmin(self, value):
+        self._bin_bmin = np.nan
         self._binfo_input = None
         self._binfo_pixel = None
         self._bstats = None
@@ -363,36 +367,36 @@ class Beach:
         return
         
     @property
-    def bmin_replace(self):
-        return self._bmin_replace
+    def bin_bmin_replace(self):
+        return self._bin_bmin_replace
 
-    @bmin_replace.setter
-    def bmin_replace(self, value):
-        self._bmin_replace = value
+    @bin_bmin_replace.setter
+    def bin_bmin_replace(self, value):
+        self._bin_bmin_replace = value
     
-    @bmin_replace.deleter
-    def bmin_replace(self, value):
-        self._bmin_replace = False
+    @bin_bmin_replace.deleter
+    def bin_bmin_replace(self, value):
+        self._bin_bmin_replace = False
 
     @property
-    def bpa(self):
+    def bin_bpa(self):
         """
-        Return a copy of bpa
+        Return a copy of bin_bpa
         """
-        return copy.deepcopy(self._bpa)
+        return copy.deepcopy(self._bin_bpa)
 
-    @bpa.setter
-    def bpa(self, value):
+    @bin_bpa.setter
+    def bin_bpa(self, value):
         """
-        Set bpa
+        Set bin_bpa
         """
-        self._bpa = copy.deepcopy(value)
+        self._bin_bpa = copy.deepcopy(value)
         self.genbinfo(verb = False)
         return
 
-    @bpa.deleter
-    def bpa(self, value):
-        self._bpa = np.nan
+    @bin_bpa.deleter
+    def bin_bpa(self, value):
+        self._bin_bpa = np.nan
         self._binfo_input = None
         self._binfo_pixel = None
         self._bstats = None
@@ -400,36 +404,36 @@ class Beach:
         return
         
     @property
-    def bpa_replace(self):
-        return self._bpa_replace
+    def bin_bpa_replace(self):
+        return self._bin_bpa_replace
 
-    @bpa_replace.setter
-    def bpa_replace(self, value):
-        self._bpa_replace = value
+    @bin_bpa_replace.setter
+    def bin_bpa_replace(self, value):
+        self._bin_bpa_replace = value
     
-    @bpa_replace.deleter
-    def bpa_replace(self, value):
-        self._bpa_replace = False
+    @bin_bpa_replace.deleter
+    def bin_bpa_replace(self, value):
+        self._bin_bpa_replace = False
 
     @property
-    def restfreq(self):
+    def bin_restfreq(self):
         """
-        Return a copy of restfreq
+        Return a copy of bin_restfreq
         """
-        return copy.deepcopy(self._restfreq)
+        return copy.deepcopy(self._bin_restfreq)
 
-    @restfreq.setter
-    def restfreq(self, value):
+    @bin_restfreq.setter
+    def bin_restfreq(self, value):
         """
-        Set restfreq
+        Set bin_restfreq
         """
-        self._restfreq = copy.deepcopy(value)
+        self._bin_restfreq = copy.deepcopy(value)
         self.genbinfo(verb = False)
         return
 
-    @restfreq.deleter
-    def restfreq(self, value):
-        self._restfreq = None
+    @bin_restfreq.deleter
+    def bin_restfreq(self, value):
+        self._bin_restfreq = None
         self._binfo_input = None
         self._binfo_pixel = None
         self._bstats = None
@@ -437,229 +441,229 @@ class Beach:
         return
         
     @property
-    def restfreq_replace(self):
-        return self._restfreq_replace
+    def bin_restfreq_replace(self):
+        return self._bin_restfreq_replace
 
-    @restfreq_replace.setter
-    def restfreq_replace(self, value):
-        self._restfreq_replace = value
+    @bin_restfreq_replace.setter
+    def bin_restfreq_replace(self, value):
+        self._bin_restfreq_replace = value
     
-    @restfreq_replace.deleter
-    def restfreq_replace(self, value):
-        self._restfreq_replace = False
+    @bin_restfreq_replace.deleter
+    def bin_restfreq_replace(self, value):
+        self._bin_restfreq_replace = False
 
     @property
-    def normfreq(self):
+    def bin_normfreq(self):
         """
-        Return a copy of normfreq
+        Return a copy of bin_normfreq
         """
-        return copy.deepcopy(self._normfreq)
+        return copy.deepcopy(self._bin_normfreq)
 
-    @normfreq.setter
-    def normfreq(self, value):
+    @bin_normfreq.setter
+    def bin_normfreq(self, value):
         """
-        Set normfreq
+        Set bin_normfreq
         """
-        self._normfreq = copy.deepcopy(value)
+        self._bin_normfreq = copy.deepcopy(value)
         if self_genbstats_exe:
             self.genbstats(verb = False)
         return
 
-    @normfreq.deleter
-    def normfreq(self, value):
-        self._normfreq = 1.4E9
+    @bin_normfreq.deleter
+    def bin_normfreq(self, value):
+        self._bin_normfreq = 1.4E9
         self._bstats = None
         self._binfo_target = None
         return
 
     @property
-    def parameter(self):
+    def bst_parameter(self):
         """
-        Return a copy of parameter
+        Return a copy of bst_parameter
         """
-        return copy.deepcopy(self._parameter)
+        return copy.deepcopy(self._bst_parameter)
 
-    @parameter.setter
-    def parameter(self, value):
+    @bst_parameter.setter
+    def bst_parameter(self, value):
         """
-        Set parameter
+        Set bst_parameter
         """
-        self._parameter = copy.deepcopy(value)
+        self._bst_parameter = copy.deepcopy(value)
         if self_genbstats_exe:
             self.genbstats(verb = False)
         return
 
-    @parameter.deleter
-    def parameter(self, value):
-        self._parameter = 'all'
+    @bst_parameter.deleter
+    def bst_parameter(self, value):
+        self._bst_parameter = 'all'
         self._bstats = None
         self._binfo_target = None
         return
 
     @property
-    def scaling(self):
+    def bst_scaling(self):
         """
-        Return a copy of parameter
+        Return a copy of bst_scaling
         """
-        return copy.deepcopy(self._scaling)
+        return copy.deepcopy(self._bst_scaling)
 
-    @scaling.setter
-    def scaling(self, value):
+    @bst_scaling.setter
+    def bst_scaling(self, value):
         """
-        Set scaling
+        Set bst_scaling
         """
-        self._scaling = copy.deepcopy(value)
+        self._bst_scaling = copy.deepcopy(value)
         if self_genbstats_exe:
             self.genbstats(verb = False)
         return
 
-    @scaling.deleter
-    def parameter(self, value):
-        self._scaling = 'frequency'
+    @bst_scaling.deleter
+    def bst_scaling(self, value):
+        self._bst_scaling = 'frequency'
         self._bstats = None
         self._binfo_target = None
         return
 
     @property
-    def stype(self):
+    def bst_stype(self):
         """
-        Return a copy of stype
+        Return a copy of bst_stype
         """
-        return copy.deepcopy(self._stype)
+        return copy.deepcopy(self._bst_stype)
 
-    @stype.setter
-    def stype(self, value):
+    @bst_stype.setter
+    def bst_stype(self, value):
         """
-        Set stype
+        Set bst_stype
         """
-        self._stype = copy.deepcopy(value)
+        self._bst_stype = copy.deepcopy(value)
         if self._genbstats_exe:
             self.genbstats(verb = False)
         return
 
-    @stype.deleter
-    def stype(self, value):
-        self._stype = ['median','medstdev']
-        self._bstats = None
-        self._binfo_target = None
-        return
-    
-    @property
-    def sample(self):
-        """
-        Return a copy of sample
-        """
-        return copy.deepcopy(self._sample)
-
-    @sample.setter
-    def sample(self, value):
-        """
-        Set sample
-        """
-        self._sample = copy.deepcopy(value)
-        if self_genbstats_exe:
-            self.genbstats(verb = False)
-        return
-
-    @sample.deleter
-    def sample(self, value):
-        self._sample = 'total'
+    @bst_stype.deleter
+    def bst_stype(self, value):
+        self._bst_stype = ['median','medstdev']
         self._bstats = None
         self._binfo_target = None
         return
     
     @property
-    def percents(self):
+    def bst_sample(self):
         """
-        Return a copy of percents
+        Return a copy of bst_sample
         """
-        return copy.deepcopy(self._percents)
+        return copy.deepcopy(self._bst_sample)
 
-    @percents.setter
-    def percents(self, value):
+    @bst_sample.setter
+    def bst_sample(self, value):
         """
-        Set percents
+        Set bst_sample
         """
-        self._percents = copy.deepcopy(value)
+        self._bst_sample = copy.deepcopy(value)
         if self_genbstats_exe:
             self.genbstats(verb = False)
         return
 
-    @percents.deleter
-    def percents(self, value):
-        self._percents = 90
+    @bst_sample.deleter
+    def bst_sample(self, value):
+        self._bst_sample = 'total'
+        self._bstats = None
+        self._binfo_target = None
+        return
+    
+    @property
+    def bst_percents(self):
+        """
+        Return a copy of bst_percents
+        """
+        return copy.deepcopy(self._bst_percents)
+
+    @bst_percents.setter
+    def bst_percents(self, value):
+        """
+        Set bst_percents
+        """
+        self._bst_percents = copy.deepcopy(value)
+        if self_genbstats_exe:
+            self.genbstats(verb = False)
+        return
+
+    @bst_percents.deleter
+    def bst_percents(self, value):
+        self._bst_percents = 90
         self._bstats = None
         self._binfo_target = None
         return
 
     @property
-    def tolerance(self):
+    def bst_tolerance(self):
         """
-        Return a copy of tolerance
+        Return a copy of bst_tolerance
         """
-        return copy.deepcopy(self._tolerance)
+        return copy.deepcopy(self._bst_tolerance)
 
-    @tolerance.setter
-    def tolerance(self, value):
+    @bst_tolerance.setter
+    def bst_tolerance(self, value):
         """
-        Set tolerance
+        Set bst_tolerance
         """
-        self._tolerance = copy.deepcopy(value)
+        self._bst_tolerance = copy.deepcopy(value)
         if self._genbstats_exe:
             self.genbstats(verb = False)
         return
 
-    @tolerance.deleter
-    def tolerance(self, value):
-        self._tolerance = 0.01
+    @bst_tolerance.deleter
+    def bst_tolerance(self, value):
+        self._bst_tolerance = 0.01
         self._bstats = None
         self._binfo_target = None
         return
 
     @property
-    def nsamps(self):
+    def bst_nsamps(self):
         """
-        Return a copy of nsamps
+        Return a copy of bst_nsamps
         """
-        return copy.deepcopy(self._nsamps)
+        return copy.deepcopy(self._bst_nsamps)
 
-    @nsamps.setter
-    def nsamps(self, value):
+    @bst_nsamps.setter
+    def bst_nsamps(self, value):
         """
-        Set nsamps
+        Set bst_nsamps
         """
-        self._nsamps = copy.deepcopy(value)
+        self._bst_nsamps = copy.deepcopy(value)
         if self._genbstats_exe:
             self.genbstats(verb = False)
         return
 
-    @nsamps.deleter
-    def nsamps(self, value):
-        self._nsamps = 200
+    @bst_nsamps.deleter
+    def bst_nsamps(self, value):
+        self._bst_nsamps = 200
         self._bstats = None
         self._binfo_target = None
         return
 
     @property
-    def epsilon(self):
+    def bst_epsilon(self):
         """
-        Return a copy of epsilon
+        Return a copy of bst_epsilon
         """
-        return copy.deepcopy(self._epsilon)
+        return copy.deepcopy(self._bst_epsilon)
 
-    @epsilon.setter
-    def epsilon(self, value):
+    @bst_epsilon.setter
+    def bst_epsilon(self, value):
         """
-        Set epsilon
+        Set bst_epsilon
         """
-        self._epsilon = copy.deepcopy(value)
+        self._bst_epsilon = copy.deepcopy(value)
         if self._genbstats_exe:
             self.genbstats(verb = False)
         return
 
-    @epsilon.deleter
-    def epsilon(self, value):
-        self._epsilon = 0.0005
+    @bst_epsilon.deleter
+    def bst_epsilon(self, value):
+        self._bst_epsilon = 0.0005
         self._bstats = None
         self._binfo_target = None
         return
@@ -1409,25 +1413,25 @@ class Beach:
         """
         if type(self._headers) != type(None):
             self._headers = None
-        self._cubenames = None
+        self._inc_cubes = None
         return
 
-    def initheaders(self, cubenames = None, silent = False):
+    def genincubus(self, inc_cubes = None):
         """
-        Add cubenames to intrinsic cubenames
+        Add inc_cubes to intrinsic inc_cubes
 
         Input:
-        cubenames (list of str): List of names of input cubes/images
+        inc_cubes (list of str): List of names of input cubes/images
 
-        Reads cubenames in as the list of target headers/images
+        Reads inc_cubes in as the list of target headers/images
         """
-        if type(cubenames) == type(None):
+        if type(inc_cubes) == type(None):
             return
 
-        # Check if cubenames have been defined before
+        # Check if inc_cubes have been defined before
         #dontinit = True
-        #for i in range(len(cubenames)):
-        #    if cubenames[i] != self._cubenames[i]:
+        #for i in range(len(inc_cubes)):
+        #    if inc_cubes[i] != self._inc_cubes[i]:
         #        dontinit == False
         #        break
             
@@ -1436,15 +1440,15 @@ class Beach:
         #    return
         
         self._resetheaders()
-        self._cubenames = copy.deepcopy(cubenames)
+        self._inc_cubes = copy.deepcopy(inc_cubes)
         self._headers = []
 
-        if type(self._cubenames) == type([]):
-            cubenamelist = self._cubenames
+        if type(self._inc_cubes) == type([]):
+            cubenamelist = self._inc_cubes
         else:
-            cubenamelist = [self._cubenames]    
+            cubenamelist = [self._inc_cubes]    
             
-        for cube in self._cubenames:
+        for cube in self._inc_cubes:
             if type(cube) == type(''):
                 self._headers += [fits.getheader(cube)]
             else:
@@ -1466,7 +1470,7 @@ class Beach:
         """
         
         if type(self._headers) == type(None):
-            self.initheaders()
+            self.genincubus()
             
         if type(self._headers) == type(None):
             return
@@ -1502,7 +1506,7 @@ class Beach:
         self._quantname is assumed to be a list of linear ndarrays of
         the size of naxis3 of self._headers (i.e. the number of
         channels), which should be filled with the default values for
-        bmaj, bmin, etc., following the same expansion scheme. If
+        bin_bmaj, bmin, etc., following the same expansion scheme. If
         inquant is None, the call is ignored, if it is a single
         (float) number (including np.nan), all fields in the output
         are filled with that number, if it is a list of numbers
@@ -1584,36 +1588,36 @@ class Beach:
         
         return output
 
-    def _setdefreplace(self, bmaj_replace = None,
-                            bmin_replace = None,
-                            bpa_replace = None,
-                            restfreq_replace = None):
+    def _setdefreplace(self, bin_bmaj_replace = None,
+                            bin_bmin_replace = None,
+                            bin_bpa_replace = None,
+                            bin_restfreq_replace = None):
         """
         Read in values for replacements of defvalues
         """
         
-        if self._bmaj_replace == None:
-            self._bmaj_replace = False
-        if self._bmin_replace == None:
-            self._bmin_replace = False
-        if self._bpa_replace == None:
-            self._bpa_replace = False
-        if self._restfreq_replace == None:
-            self._restfreq_replace = False
+        if self._bin_bmaj_replace == None:
+            self._bin_bmaj_replace = False
+        if self._bin_bmin_replace == None:
+            self._bin_bmin_replace = False
+        if self._bin_bpa_replace == None:
+            self._bin_bpa_replace = False
+        if self._bin_restfreq_replace == None:
+            self._bin_restfreq_replace = False
 
-        if bmaj_replace != None:
-            self._bmaj_replace = bmaj_replace
-        if bmin_replace != None:
-            self._bmin_replace = bmin_replace
-        if bpa_replace != None:
-            self._bpa_replace = bpa_replace
-        if restfreq_replace != None:
-            self._restfreq_replace = restfreq_replace
+        if bin_bmaj_replace != None:
+            self._bin_bmaj_replace = bin_bmaj_replace
+        if bin_bmin_replace != None:
+            self._bin_bmin_replace = bin_bmin_replace
+        if bin_bpa_replace != None:
+            self._bin_bpa_replace = bin_bpa_replace
+        if bin_restfreq_replace != None:
+            self._bin_restfreq_replace = bin_restfreq_replace
             
-    def _initbinfo_inputvar(self, bmaj = None, bmaj_replace = None, bmin = None,
-                    bmin_replace = None, bpa = None, bpa_replace = None,
-                            restfreq = None, restfreq_replace = None,
-                            normfreq = None, verb = False):
+    def _initbinfo_inputvar(self, bin_bmaj = None, bin_bmaj_replace = None, bin_bmin = None,
+                    bin_bmin_replace = None, bin_bpa = None, bin_bpa_replace = None,
+                            bin_restfreq = None, bin_restfreq_replace = None,
+                            bin_normfreq = None, verb = False):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -1631,11 +1635,11 @@ class Beach:
                     output = True
         return output
     
-    def genbinfo(self, bmaj = None, bmaj_replace = None,
-                       bmin = None, bmin_replace = None,
-                       bpa = None,  bpa_replace = None,
-                       restfreq = HIFREQ, restfreq_replace = None,
-                       normfreq = None, verb = True):
+    def genbinfo(self, bin_bmaj = None, bin_bmaj_replace = None,
+                       bin_bmin = None, bin_bmin_replace = None,
+                       bin_bpa = None,  bin_bpa_replace = None,
+                       bin_restfreq = HIFREQ, bin_restfreq_replace = None,
+                       bin_normfreq = None, verb = True):
         """
         Fill beam properties into info table
         
@@ -1643,30 +1647,33 @@ class Beach:
         (multiple: None, a float, a list of floats, a numpy
                  array, or a list with numpy arrays)
 
-        bmaj     (multiple): Beam major axis default value(s)
-        bmaj_replace (bool): Enforce usage of default values?
-                             (True = yes)
-        bmin     (multiple): Beam minor axis default value(s)
-        bmin_replace (bool): Enforce usage of default values?
-                             (True = yes)
-        bpa     (multiple) : Beam position angle default value(s)
-        bpa_replace (bool) : Enforce usage of default values? 
+        bin_bmaj     (multiple): Beam major axis default value(s)
+        bin_bmaj_replace (bool): Enforce usage of default values?
+                                 (True = yes)
+        bin_bmin     (multiple): Beam minor axis default value(s)
+        bin_bmin_replace (bool): Enforce usage of default values?
+                                 (True = yes)
+        bin_bpa     (multiple) : Beam position angle default value(s)
+        bin_bpa_replace (bool) : Enforce usage of default values? 
 
-        restfreq (multiple): Rest frequency default value(s)
-        bpa_replace (bool) : Enforce usage of default values? 
+        bin_restfreq (multiple)    : Rest frequency default value(s)
+        bin_restfreq_replace (bool): Enforce usage of default values?
+
+        bin_normfreq (float)       : Frequency to normalize beam to if
+                                 mode is 'frequency'
 
         Note that if None is passed as a value, the input is ignored
         if self._quantity is not None.
         """
-        stop = self._initbinfo_inputvar(bmaj = bmaj,
-                                        bmaj_replace = bmaj_replace,
-                                        bmin = bmin, bmin_replace =
-                                        bmin_replace, bpa = bpa,
-                                        bpa_replace = bpa_replace,
-                                        restfreq = restfreq,
-                                        restfreq_replace =
-                                        restfreq_replace,
-                                        normfreq = normfreq, verb = verb)
+        stop = self._initbinfo_inputvar(bin_bmaj = bin_bmaj,
+                                        bin_bmaj_replace = bin_bmaj_replace,
+                                        bin_bmin = bin_bmin, bin_bmin_replace =
+                                        bin_bmin_replace, bin_bpa = bin_bpa,
+                                        bin_bpa_replace = bin_bpa_replace,
+                                        bin_restfreq = bin_restfreq,
+                                        bin_restfreq_replace =
+                                        bin_restfreq_replace,
+                                        bin_normfreq = bin_normfreq, verb = verb)
 
         if stop:
             if self._verb:
@@ -1683,12 +1690,12 @@ class Beach:
             
         if type(self._binfo_input) == type(None):
             if self._verb:
-                warning('binfo_input not present. Use initheaders first.')
+                warning('binfo_input not present. Use genincubus first.')
             return
         
         # Do not try to regenerate, if this is none, it has deliberately been
         # set to None, as __init__ has a default of 1E9
-        if type(self._normfreq) == type(None):
+        if type(self._bin_normfreq) == type(None):
             if verb or self._verb:
                 warnings.warn('No normalization frequency read in, which '+ \
                               'disables further processing.')
@@ -1697,15 +1704,15 @@ class Beach:
         print('genbinfo: reading beam info.')
         print()
         
-        normfreq = self._getdefault(self._normfreq)
+        normfreq = self._getdefault(self._bin_normfreq)
 
         # Get defaults
-        bmaj = self._getdefault(self._bmaj)
-        bmin = self._getdefault(self._bmin)
-        bpa = self._getdefault(self._bpa)
-        restfreq = self._getdefault(self._restfreq)
+        bmaj = self._getdefault(self._bin_bmaj)
+        bmin = self._getdefault(self._bin_bmin)
+        bpa = self._getdefault(self._bin_bpa)
+        restfreq = self._getdefault(self._bin_restfreq)
 
-        #self._setdefreplace(bmaj_replace = bmaj_replace,
+        #self._setdefreplace(bin_bmaj_replace = bin_bmaj_replace,
                             #bmin_replace = bmin_replace,
                             #bpa_replace = bpa_replace,
                             #restfreq_replace = restfreq_replace)
@@ -1716,7 +1723,7 @@ class Beach:
             # rest frequency, but who knows
             restfreqtab = self._getchanval(
                 'RESTFREQ', self._headers[i], value = restfreq[i],
-                usevalue = restfreq_replace, usedefault = True)
+                usevalue = bin_restfreq_replace, usedefault = True)
             
             # Count numbers of axes
             naxis = self._headers[i]['NAXIS']
@@ -1805,13 +1812,13 @@ class Beach:
             # by bmaj, bmin, and bpa
             self._binfo_input[i][:,0] = self._getchanval( \
                 'BMAJ', self._headers[i], value = bmaj[i],
-                 usevalue = bmaj_replace, usedefault = True, dscal = self._binfo_input[i][:,5])
+                 usevalue = bin_bmaj_replace, usedefault = True, dscal = self._binfo_input[i][:,5])
             self._binfo_input[i][:,1] = self._getchanval( \
                 'BMIN', self._headers[i], value = bmin[i],
-                usevalue = bmin_replace, usedefault = True, dscal = self._binfo_input[i][:,5])
+                usevalue = bin_bmin_replace, usedefault = True, dscal = self._binfo_input[i][:,5])
             self._binfo_input[i][:,2] = self._getchanval( \
                 'BPA', self._headers[i], value = bpa[i],
-                usevalue = bpa_replace, usedefault = True)
+                usevalue = bin_bpa_replace, usedefault = True)
 
             if np.isnan(self._binfo_input[i][:,3].sum()):
                 thafreq = normfreq[i]
@@ -2075,7 +2082,7 @@ class Beach:
             for key1 in ['constant', 'frequency']:
                 self._bstats[key0][key1] = {}
 
-                # stype
+                # bst_stype
                 for key2 in ['minimum', 'maximum', 'average', 'stdev', 'median',
                              'mad', 'madstdev', 'percentile', 'percents',
                              'commonbeam']:
@@ -2136,9 +2143,9 @@ class Beach:
         
         return collist
     
-    def _initbstatsvar(self, parameter = None, stype = None, scaling = None,
-                       sample = None, percents = None, tolerance = None,
-                       nsamps = None, epsilon = None, verb = False):
+    def _initbstatsvar(self, bst_parameter = None, bst_stype = None, bst_scaling = None,
+                       bst_sample = None, bst_percents = None, bst_tolerance = None,
+                       bst_nsamps = None, bst_epsilon = None, verb = False):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -2156,35 +2163,35 @@ class Beach:
                     output = True
         return output
             
-    def genbstats(self, parameter = None, scaling = None, stype = None,
-                  sample = None, percents = None, tolerance = None,
-                  nsamps = None, epsilon = None, verb = True):
+    def genbstats(self, bst_parameter = None, bst_scaling = None, bst_stype = None,
+                  bst_sample = None, bst_percents = None, bst_tolerance = None,
+                  bst_nsamps = None, bst_epsilon = None, verb = True):
         """
         Generate statistics and dump it into the bstats structure
         
         Input:
-        parameter (str or list of str): Parameter name ('bmaj', 
-                                        'bmin', 'bpa', 'bsa', 'ceb')
-        scaling (str or list of str)    : Scaling type ('constant', 
+        bst_parameter (str or list of str): Parameter name ('bmaj', 
+                                            'bmin', 'bpa', 'bsa', 'ceb')
+        bst_scaling (str or list of str)  : Scaling type ('constant', 
                                         'frequency')
-        stype (str or list of str)    : Type of statistics to
-                                        calculate ('minimum',
-                                        'maximum', 'average',
-                                        'stdev', 'median', 'mad',
-                                        'madstdev', 'percentile',
-                                        'percents', 'combeam')
-        sample (str or list of str)   : Sample(s) to calculate
-                                        statistics on ('cube', 'chan',
-                                        'total')
-        perc (float)                  : Percents for the percentile
-                                        statistics
-        tolerance (float)             : Tolerance for the common beam
-        nsamps (int)                  : Number of edges of beam for
-                                        common beam
-        epsilon (float)               : Epsilon for common beam
+        bst_stype (str or list of str)    : Type of statistics to
+                                            calculate ('minimum',
+                                            'maximum', 'average',
+                                            'stdev', 'median', 'mad',
+                                            'madstdev', 'percentile',
+                                            'percents', 'combeam')
+        bst_sample (str or list of str)   : Sample(s) to calculate
+                                            statistics on ('cube', 'chan',
+                                            'total')
+        bst_percents (float)              : Percents for the percentile
+                                            statistics
+        bst_tolerance (float)                 : Tolerance for the common beam
+        bst_nsamps (int)                      : Number of edges of beam for
+                                            common beam
+        bst_epsilon (float)                   : Epsilon for common beam
 
         The method generates statistics on the collected beam
-        properties.  The parameters parameter, scaling, sample, and
+        properties.  The parameters bst_parameter, bst_scaling, bst_sample, and
         type determine which part of the bstats structure gets
         filled. If for any of the parameters 'all' is chosen (which is
         the default), all fields are filled. If the scaling type is
@@ -2196,20 +2203,20 @@ class Beach:
         circular beam with a beam solid angle of bsa (sqrt(bmaj*bmin))
 
         The _bstats entity is a nested dictionary
-        _bstats[parameter][scaling][stype][sample], where sample
+        _bstats[bst_parameter][bst_scaling][bst_stype][bst_sample], where sample
         determines the type of element (numpy scalar, numpy ndarray,
         or list of scalars, see below):
 
-        parameter: 
+        bst_parameter: 
             major axis dispersions/hpbws ('bmaj')
             minor axis dispersions/hpbws ('bmin')
             beam position angles ('bpa')
             beam solid angle ('bsa')
             circular equivalent beam dispersions/hpbws('ceb')
-        scaling:
+        bst_scaling:
             constant ('const')
             frequency ('frequency')
-        stype:
+        bst_stype:
             Minimum ('minimum')
             Maximum ('maximum')
             Average ('average')
@@ -2224,10 +2231,10 @@ class Beach:
             Common beam as calculated using the radio-beam module
             (https://radio-beam.readthedocs.io) based on the Khachiyan
             algorithm (https://en.wikipedia.org/wiki/Ellipsoid_method).
-            Parameters tolerance, nsamps, epsilon are used for this 
+            Parameters bst_tolerance, bst_nsamps, epsilon are used for this 
             method ('commonbeam')
 
-        sample:
+        bst_sample:
             statistics to be carried out for all channels per cube
             ('cube', generates lists with length of the number of
             input cubes)
@@ -2241,11 +2248,11 @@ class Beach:
 
         """
 
-        stop = self._initbstatsvar(parameter = parameter, scaling =
-                                   scaling, stype = stype, sample =
-                                   sample, percents = percents,
-                                   tolerance = tolerance, nsamps =
-                                   nsamps, epsilon = epsilon, verb =
+        stop = self._initbstatsvar(bst_parameter = bst_parameter, bst_scaling =
+                                   bst_scaling, bst_stype = bst_stype, bst_sample =
+                                   bst_sample, bst_percents = bst_percents,
+                                   bst_tolerance = bst_tolerance, bst_nsamps =
+                                   bst_nsamps, bst_epsilon = bst_epsilon, verb =
                                    verb)
 
         if stop:
@@ -2265,10 +2272,10 @@ class Beach:
 
         print('genbstats: generating statistics')
         
-        para = copy.deepcopy(self._parameter)
-        scal = copy.deepcopy(self._scaling)
-        styp = copy.deepcopy(self._stype)
-        samp = copy.deepcopy(self._sample)
+        para = copy.deepcopy(self._bst_parameter)
+        scal = copy.deepcopy(self._bst_scaling)
+        styp = copy.deepcopy(self._bst_stype)
+        samp = copy.deepcopy(self._bst_sample)
 
         # Expand all parameters to the same format
         if type(para) == type(''):
@@ -2338,10 +2345,10 @@ class Beach:
 
                     # Apply statistics
                     kwargs = {
-                        'percents' : self._percents,
-                        'tolerance': self._tolerance,
-                        'nsamps'   : self._nsamps,
-                        'epsilon'  : self._epsilon
+                        'percents' : self._bst_percents,
+                        'tolerance': self._bst_tolerance,
+                        'nsamps'   : self._bst_nsamps,
+                        'epsilon'  : self._bst_epsilon
                         }
                     stats = met(collist, **kwargs)
                     #print('stats ', stats)
@@ -2651,28 +2658,28 @@ class Beach:
                             
                         # If the item is not present, we add it and
                         # generate the statistics
-                        if type(self._parameter) == type(''):
-                            if self._parameter != item[0]:
-                                self._parameter = [self._parameter]
-                        if type(self._scaling) == type(''):
-                            if self._scaling != item[1]:
-                                self._scaling = [self._scaling]
-                        if type(self._stype) == type(''):
-                            if self._stype != item[2]:
-                                self._stype = [self._stype]
-                        if type(self._sample) == type(''):
-                            if self._sample != item[2]:
-                                self._sample = [self._sample]
-                        if not item[0] in self._parameter:
-                            self._parameter += [item[0]]
-                        if not item[1] in self._scaling:
-                            self._scaling += [item[0]]
-                        if not item[0] in self._stype:
-                            self._stype += [item[0]]
-                        if not item[0] in self._sample:
-                            self._sample += [item[0]]
-                        self.genbstats(parameter = item[0], scaling = item[1], stype =
-                                       item[2], sample = item[3], verb = verb)
+                        if type(self._bst_parameter) == type(''):
+                            if self._bst_parameter != item[0]:
+                                self._bst_parameter = [self._bst_parameter]
+                        if type(self._bst_scaling) == type(''):
+                            if self._bst_scaling != item[1]:
+                                self._bst_scaling = [self._bst_scaling]
+                        if type(self._bst_stype) == type(''):
+                            if self._bst_stype != item[2]:
+                                self._bst_stype = [self._bst_stype]
+                        if type(self._bst_sample) == type(''):
+                            if self._bst_sample != item[2]:
+                                self._bst_sample = [self._bst_sample]
+                        if not item[0] in self._bst_parameter:
+                            self._bst_parameter += [item[0]]
+                        if not item[1] in self._bst_scaling:
+                            self._bst_scaling += [item[0]]
+                        if not item[0] in self._bst_stype:
+                            self._bst_stype += [item[0]]
+                        if not item[0] in self._bst_sample:
+                            self._bst_sample += [item[0]]
+                        self.genbstats(bst_parameter = item[0], bst_scaling = item[1], bst_stype =
+                                       item[2], bst_sample = item[3], verb = verb)
                     if type(self._bstats) == type(None) or \
                        np.isnan(self._bstats[item[0]][item[1]][item[2]][item[3]]):
                         if verb or self._verb:
@@ -2835,8 +2842,8 @@ class Beach:
             if self._hist_sample == 'total':
                 titlestring = '<b>Beam properties of all planes in all data sets</b>'
             elif self._hist_sample == 'cube':
-                if type(self._cubenames[i]) == type(''):
-                    titlestring = '<b>Beam properties of planes in data set {:s}</b>'.format(self._cubenames[i])
+                if type(self._inc_cubes[i]) == type(''):
+                    titlestring = '<b>Beam properties of planes in data set {:s}</b>'.format(self._inc_cubes[i])
                 else:
                     titlestring = '<b>Beam properties of planes in data set {:d}</b>'.format(i)
                     
@@ -2985,8 +2992,7 @@ class Beach:
                   tar_bpa_inter = None, tar_bpa_slope = None,
                   tar_bpa_absc = None, tar_scaling = None,
                   verb = True):
-        """
-        Generate a target beam structure
+        """Generate a target beam structure
 
         Input:
         (multiple: None, a float, a list of floats, a numpy array, 
@@ -3023,9 +3029,10 @@ class Beach:
         The parameters are either direct inputs of the target
         quantities with multiple possible input as described for
         _getdefault. Alternatively, a list of four strings is passed,
-        denoting (in that order) parameter, scaling, stype, and sample
-        as described in method genbstats. The corresponding values
-        will then be copied from the bstats struct.
+        denoting (in that order) bst_parameter, bst_scaling,
+        bst_stype, and bst_sample as described in method
+        genbstats. The corresponding values will then be copied from
+        the bstats struct.
 
         Depending on scaling, the struct is then transformed into an
         analogue of a binfo_pixel struct, which then represents the
@@ -3062,13 +3069,13 @@ class Beach:
                                 
         # Do not try to regenerate, if this is none, it has deliberately been
         # set to None, as __init__ has a default of 1E9
-        if type(self._normfreq) == type(None):
+        if type(self._bin_normfreq) == type(None):
             if verb or self._verb:
                 warnings.warn('No normalization frequency read in, which '+ \
                               'disables further processing.')
             return
 
-        normfreq = self._getdefault(self._normfreq)
+        normfreq = self._getdefault(self._bin_normfreq)
 
         # Check if input is sufficient, checking for bstats is enough
         # as this cascades up
@@ -3272,10 +3279,10 @@ class Beach:
         else:
             transn = self._tra_fitsnames
 
-        if type(self._cubenames) == type(''):
-            cuben = [self._cubenames]
+        if type(self._inc_cubes) == type(''):
+            cuben = [self._inc_cubes]
         else:
-            cuben = self._cubenames
+            cuben = self._inc_cubes
 
         if type(self._tra_modelnames) == type([]):
             modeln = self._tra_modelnames
@@ -4632,7 +4639,7 @@ def testing():
     params = { 'cubes': incubi,
                'tra_fitsnames': outcubi
     }
-    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
+    beach = Beach(inc_cubes = params['cubes'], gentrans_exe = False)
     printbeachconts(beach)
     print()
     print('########################')
@@ -4663,7 +4670,7 @@ def testing():
                'tra_modelnames': pincubi
     }
     print(params)
-#    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
+#    beach = Beach(inc_cubes = params['cubes'], gentrans_exe = False)
 #    printbeachconts(beach)
     beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_modelnames = params['tra_modelnames'], tra_overwrite = True)
     print()
@@ -4680,7 +4687,7 @@ def testing():
     params = { 'cubes': incubi,
                'tra_fitsnames': outcubi
     }
-#    Beach(cubenames = params['cubes'], tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
+#    Beach(inc_cubes = params['cubes'], tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
     print()
     print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
     print()
@@ -4702,7 +4709,7 @@ def testing():
     params = { 'cubes': incubi,
                'tra_fitsnames': outcubi
     }
-#    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
+#    beach = Beach(inc_cubes = params['cubes'], gentrans_exe = False)
 #    printbeachconts(beach)
 #    beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
     print()
@@ -4761,7 +4768,7 @@ def testing():
     params = { 'cubes': incubi,
                'tra_fitsnames': outcubi
     }
-#    beach = Beach(cubenames = params['cubes'], gentrans_exe = False)
+#    beach = Beach(inc_cubes = params['cubes'], gentrans_exe = False)
 #    printbeachconts(beach)
 #    beach.genhistoplots(hist_plotname='test5.png', hist_interactive='test5.html', hist_scaling = 'constant', hist_sample = 'chan', hist_n_per_bin = 2, hist_overwrite = True)
     #beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
