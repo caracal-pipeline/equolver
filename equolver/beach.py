@@ -11,10 +11,6 @@ from astropy import units as u
 from kapteyn import wcs as kwcs
 import pyfftw
 import datetime
-
-#from bokeh.layouts import gridplot
-#from bokeh.plotting import figure, output_file, show
-#import bokeh.layouts as bokeh_layouts
 import bokeh.plotting as bokeh_plotting
 import bokeh.models as bokeh_models
 import bokeh.layouts as bokeh_layouts
@@ -36,7 +32,7 @@ class Beach:
                        bmin = np.nan, bmin_replace = False,
                        bpa = np.nan, bpa_replace = False,
                        restfreq = HIFREQ, restfreq_replace = False,
-                       normfreq = 1E9,
+                       normfreq = 1.4E9,
                        parameter = 'all',
                        scaling = 'all',
                        #stype = ['average', 'stdev', 'commonbeam'],
@@ -60,7 +56,7 @@ class Beach:
                        gentrans_exe = True, tra_modelnames = None, tra_fitsnames = None,
                        tra_mode = 'mask', tra_hdmode = True, tra_tol = 2,
                        tra_overwrite = False, 
-                       tra_commonbeam = True, tra_indibeam = True,
+                       tra_commonbeam = True, tra_indibeam = True, tra_return = False,
                        threads = 1, verb = False):
         """Private instance variables:
         (multiple: None, a float, a list of floats, a numpy array, 
@@ -174,7 +170,7 @@ class Beach:
         for para in [ 'gentrans_exe', 'tra_modelnames',
                       'tra_fitsnames', 'tra_mode', 'tra_hdmode', 'tra_tol',
                       'tra_overwrite', 'tra_commonbeam',
-                      'tra_indibeam']:
+                      'tra_indibeam', 'tra_return']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
             
         if self._gentrans_exe:
@@ -253,6 +249,7 @@ class Beach:
         self._tra_overwrite = None
         self._tra_commonbeam = None
         self._tra_indibeam = None
+        self._tra_return = None
 
         self._threads = None
         self._verb = True
@@ -470,7 +467,7 @@ class Beach:
 
     @normfreq.deleter
     def normfreq(self, value):
-        self._normfreq = 1.0E9
+        self._normfreq = 1.4E9
         self._bstats = None
         self._binfo_target = None
         return
@@ -1272,6 +1269,28 @@ class Beach:
         return
 
     @property
+    def tra_return(self):
+        """
+        Return a copy of tra_return
+        """
+        return self._tra_return
+
+    @tra_return.setter
+    def tra_return(self, value):
+        """
+        Set tra_return
+        """
+        self._tra_return = value
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @tra_return.deleter
+    def tra_return(self):
+        self._tra_return = False
+        return
+
+    @property
     def binfo_input(self):
         """
         Return a copy of binfo_input
@@ -1420,13 +1439,17 @@ class Beach:
         self._cubenames = copy.deepcopy(cubenames)
         self._headers = []
 
-        if type(self._cubenames) == type(''):
-            cubenamelist = [self._cubenames]
-        else:
+        if type(self._cubenames) == type([]):
             cubenamelist = self._cubenames
+        else:
+            cubenamelist = [self._cubenames]    
             
         for cube in self._cubenames:
-            self._headers += [fits.getheader(cube)]
+            if type(cube) == type(''):
+                self._headers += [fits.getheader(cube)]
+            else:
+                self._headers += [cube[0].header]
+            
 
         # Cascade down
         self.genbinfo(verb = self._verb)
@@ -2812,7 +2835,11 @@ class Beach:
             if self._hist_sample == 'total':
                 titlestring = '<b>Beam properties of all planes in all data sets</b>'
             elif self._hist_sample == 'cube':
-                titlestring = '<b>Beam properties of planes in data set {:s}</b>'.format(self._cubenames[i])
+                if type(self._cubenames[i]) == type(''):
+                    titlestring = '<b>Beam properties of planes in data set {:s}</b>'.format(self._cubenames[i])
+                else:
+                    titlestring = '<b>Beam properties of planes in data set {:d}</b>'.format(i)
+                    
             elif self._hist_sample == 'chan':
                 titlestring = '<b>Beam properties of channel {:d}</b>'.format(i)
             else:
@@ -3120,7 +3147,7 @@ class Beach:
                          None, tra_mode = None, tra_hdmode = None,
                          tra_tol = None, tra_commonbeam = None,
                          tra_indibeam = None, tra_overwrite = None,
-                         threads = None, verb = True):
+                         tra_return = None, threads = None, verb = True):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -3142,14 +3169,18 @@ class Beach:
     def gentrans(self, tra_modelnames = None, tra_fitsnames = None,
                  tra_mode = None, tra_hdmode = None, tra_tol = None,
                  tra_commonbeam = None, tra_indibeam = None,
-                 tra_indimode = None, tra_overwrite = None, threads =
-                 None, verb = True):
+                 tra_indimode = None, tra_overwrite = None, tra_return
+                 = None, threads = None, verb = True):
         """(De-)convolve input data cubes or images to target beam shapes
 
         Input:
         tra_modelnames (str or list of str): Input fits file names, 
-                                             containing the models
+                                             containing the models,
+                                             alternatively astropy
+                                             hdulists can be given.
+                                             None is a valid input.
         tra_fitsnames (str or list of str) : Output fits file names
+                                             None is a valid input.
         tra_mode (str)                     : 'scale', 'mask', 
                                              'hybrid', 'max'
         tra_tol (float)                    : tolerance to determine if
@@ -3164,6 +3195,8 @@ class Beach:
         tra_overwrite (bool)               : Overwrite output if
                                              already existent
                                              (True: yes)?
+        tra_return (bool)                  : Return list of astropy hdulists?
+                                             (True: yes)
         threads (bool)                     : Number of threads
 
         Serially opens all cubes (images) listed in inputnames and
@@ -3207,11 +3240,13 @@ class Beach:
         """
         stop = self._initgentransvar(tra_modelnames = tra_modelnames,
                                      tra_fitsnames = tra_fitsnames,
-                                     tra_mode = tra_mode, tra_tol = tra_tol,
-                                     tra_overwrite = tra_overwrite,
-                                     tra_commonbeam = tra_commonbeam,
-                                     tra_indibeam = tra_indibeam, verb
-                                     = verb, threads = threads)
+                                     tra_mode = tra_mode, tra_tol =
+                                     tra_tol, tra_overwrite =
+                                     tra_overwrite, tra_commonbeam =
+                                     tra_commonbeam, tra_indibeam =
+                                     tra_indibeam, tra_return =
+                                     tra_return, verb = verb, threads
+                                     = threads)
         if stop:
             if verb or self._verb:
                 warnings.warn('Parameters missing. Not generating output data'+ \
@@ -3242,10 +3277,10 @@ class Beach:
         else:
             cuben = self._cubenames
 
-        if type(self._tra_modelnames) == type(''):
-            modeln = [self._tra_modelnames]
-        else:
+        if type(self._tra_modelnames) == type([]):
             modeln = self._tra_modelnames
+        else:
+            modeln = [self._tra_modelnames]
 
         if len(transn) != len(cuben):
             if verb or self._verb:
@@ -3270,10 +3305,17 @@ class Beach:
         # After this marginal verification, we continue
         print('gentrans: applying beams')
         print()
+
+        # Check if the method is supposed to return a value
+        if self._tra_return:
+            tra_returnlist = []
         
         # Open, reconvolve, copy
         for i in range(len(cuben)):
-            incubus = fits.open(cuben[i])
+            if type(cuben[i]) == type(''):
+                incubus = fits.open(cuben[i])
+            else:
+                incubus = cuben[i]
             incubus_image = incubus[0].data.astype('float'+'{:d}'.format(incubus[0].data.itemsize*8))
             orishape = incubus_image.shape
 
@@ -3292,7 +3334,10 @@ class Beach:
             planeinfo = {}
             
             for plane in range(incubus_image.shape[0]):
-                print('Processing {:s} plane {:d}'.format(cuben[i],plane))
+                if type(cuben[i]) == type(''):
+                    print('Processing {:s} plane {:d}'.format(cuben[i],plane))
+                else:
+                    print('Processing cube {:d} plane {:d}'.format(i,plane))                    
                 originbeam = self._binfo_pixel[i][plane,:]
                 targetbeam = self._binfo_target[i][plane,:]
                 originplane = incubus_image[plane,:,:]
@@ -3324,7 +3369,10 @@ class Beach:
                         failure = np.amax([originflux, targetflux])/np.amin([originflux, targetflux]) > self._tra_tol
 
                     if failure:
-                        print('{:s} plane {:d}: failed to re-convolve'.format(cuben[i],plane))
+                        if type(cuben[i]) == type(''):
+                            print('{:s} plane {:d}: failed to re-convolve'.format(cuben[i],plane))
+                        else:
+                            print('Cube {:d} plane {:d}: failed to re-convolve'.format(i,plane))                            
                         
                         if self._tra_mode == 'mask':
                             print('Masking')
@@ -3362,8 +3410,10 @@ class Beach:
                                     failure_again = np.amax([orginflux, targetflux])/np.amin([originflux, targetflux]) > self._tra_tol
 
                                 if failure_again:
-                                    print('{:s} plane {:d}: failed to re-convolve again'.format(cuben[i], plane))
-                                    print('Scaling instead\n')
+                                    if type(cuben[i]) == type(''):
+                                        print('{:s} plane {:d}: failed to re-convolve again'.format(cuben[i],plane))
+                                    else:
+                                        print('Cube {:d} plane {:d}: failed to re-convolve again'.format(i,plane))                            
                                     
                                     # If we failed again (just a safeguard), we scale only
                                     targetplane = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
@@ -3377,7 +3427,10 @@ class Beach:
                         print('')
 
             if type(modeln) != type(None):
-                inmodel = fits.open(modeln[i])
+                if type(modeln[i]) == type(''):
+                    inmodel = fits.open(modeln[i])
+                else:
+                    inmodel = modeln[i]
                 inmodel_image = inmodel[0].data.astype('float'+'{:d}'.format(inmodel[0].data.itemsize*8))
                 modelshape = inmodel_image.shape
                 if inmodel_image.ndim > 3:
@@ -3388,7 +3441,10 @@ class Beach:
                 
                 originbeam = [0.,0.,0.,0.,1.]
                 for plane in range(incubus_image.shape[0]):
-                    print('Processing {:s} plane {:d}'.format(cuben[i],plane))
+                    if type(cuben[i]) == type(''):
+                        print('Processing {:s} plane {:d}'.format(cuben[i],plane))
+                    else:
+                        print('Processing cube {:d} plane {:d}'.format(i,plane))                            
                     targetbeam = self._binfo_target[i][plane,:]
                     originplane = inmodel_image[plane,:,:]
                     targetplane = outmodel_image[plane,:,:]
@@ -3455,8 +3511,16 @@ class Beach:
 
             # Finally write and close cube
             incubus.writeto(self._tra_fitsnames[i], overwrite = self._tra_overwrite)
-            incubus.close()
-        return
+
+            if self._tra_return:
+                tra_returnlist += [incubus]
+            else:
+                incubus.close()
+
+        if self._tra_return:
+            return tra_returnlist
+        else:
+            return
 
     def _gaussian_2dp(self, naxis1 = 100, naxis2 = 100, cdelt1 = 1.,
                       cdelt2 = 1., amplitude_maj_a = 1.,
@@ -4503,8 +4567,7 @@ def printbeachconts(beach):
     print('bmin*freq : ', beach.binfo_target[1][:,7])
     print()
 
-if __name__ == '__main__':
-
+def testing():
     #Beach().convoltests()
 
     print('')
@@ -4705,3 +4768,6 @@ if __name__ == '__main__':
     print()
     print('Created output plots')
     print()
+    
+if __name__ == '__main__':
+    testing()
