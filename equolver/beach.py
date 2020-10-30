@@ -15,6 +15,9 @@ import bokeh.plotting as bokeh_plotting
 import bokeh.models as bokeh_models
 import bokeh.layouts as bokeh_layouts
 import bokeh.io as bokeh_io
+import argparse
+
+version = '0.0.0'
 
 class Beach:
     """
@@ -55,7 +58,7 @@ class Beach:
                        gentrans_exe = True, tra_modelnames = None, tra_fitsnames = None,
                        tra_mode = 'mask', tra_hdmode = True, tra_tol = 2,
                        tra_overwrite = False, 
-                       tra_commonbeam = True, tra_indibeam = True, tra_return = False,
+                       tra_commonbeam = True, tra_indibeam = True, tra_return_astropy = False,
                        threads = 1, verb = False):
         """Private instance variables:
         (multiple: None, a float, a list of floats, a numpy array, 
@@ -138,7 +141,8 @@ class Beach:
         for para in ['bin_bmaj', 'bin_bmaj_replace', 'bin_bmin',
                      'bin_bmin_replace', 'bin_bpa',
                      'bin_bpa_replace', 'bin_restfreq',
-                     'bin_restfreq_replace']
+                     'bin_restfreq_replace']:
+            self.__dict__['_'+para] = copy.deepcopy(locals()[para])
 
         if genbstats_exe:
             self._genbstats_exe = True
@@ -174,7 +178,7 @@ class Beach:
         for para in [ 'gentrans_exe', 'tra_modelnames',
                       'tra_fitsnames', 'tra_mode', 'tra_hdmode', 'tra_tol',
                       'tra_overwrite', 'tra_commonbeam',
-                      'tra_indibeam', 'tra_return']:
+                      'tra_indibeam', 'tra_return_astropy']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
             
         if self._gentrans_exe:
@@ -253,7 +257,9 @@ class Beach:
         self._tra_overwrite = None
         self._tra_commonbeam = None
         self._tra_indibeam = None
-        self._tra_return = None
+        self._tra_return_astropy = None
+
+        self.tra_astropy = None
 
         self._threads = None
         self._verb = True
@@ -1273,25 +1279,25 @@ class Beach:
         return
 
     @property
-    def tra_return(self):
+    def tra_return_astropy(self):
         """
-        Return a copy of tra_return
+        Return a copy of tra_return_astropy
         """
-        return self._tra_return
+        return self._tra_return_astropy
 
-    @tra_return.setter
-    def tra_return(self, value):
+    @tra_return_astropy.setter
+    def tra_return_astropy(self, value):
         """
-        Set tra_return
+        Set tra_return_astropy
         """
-        self._tra_return = value
+        self._tra_return_astropy = value
         if self._gentrans_exe:
             self.gentrans(verb = False)
         return
 
-    @tra_return.deleter
-    def tra_return(self):
-        self._tra_return = False
+    @tra_return_astropy.deleter
+    def tra_return_astropy(self):
+        self._tra_return_astropy = False
         return
 
     @property
@@ -3154,7 +3160,7 @@ class Beach:
                          None, tra_mode = None, tra_hdmode = None,
                          tra_tol = None, tra_commonbeam = None,
                          tra_indibeam = None, tra_overwrite = None,
-                         tra_return = None, threads = None, verb = True):
+                         tra_return_astropy = None, threads = None, verb = True):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -3176,7 +3182,7 @@ class Beach:
     def gentrans(self, tra_modelnames = None, tra_fitsnames = None,
                  tra_mode = None, tra_hdmode = None, tra_tol = None,
                  tra_commonbeam = None, tra_indibeam = None,
-                 tra_indimode = None, tra_overwrite = None, tra_return
+                 tra_indimode = None, tra_overwrite = None, tra_return_astropy
                  = None, threads = None, verb = True):
         """(De-)convolve input data cubes or images to target beam shapes
 
@@ -3202,7 +3208,7 @@ class Beach:
         tra_overwrite (bool)               : Overwrite output if
                                              already existent
                                              (True: yes)?
-        tra_return (bool)                  : Return list of astropy hdulists?
+        tra_return_astropy (bool)                  : Return list of astropy hdulists?
                                              (True: yes)
         threads (bool)                     : Number of threads
 
@@ -3251,8 +3257,8 @@ class Beach:
                                      tra_tol, tra_overwrite =
                                      tra_overwrite, tra_commonbeam =
                                      tra_commonbeam, tra_indibeam =
-                                     tra_indibeam, tra_return =
-                                     tra_return, verb = verb, threads
+                                     tra_indibeam, tra_return_astropy =
+                                     tra_return_astropy, verb = verb, threads
                                      = threads)
         if stop:
             if verb or self._verb:
@@ -3314,8 +3320,8 @@ class Beach:
         print()
 
         # Check if the method is supposed to return a value
-        if self._tra_return:
-            tra_returnlist = []
+        if self._tra_return_astropy:
+            tra_return_astropylist = []
         
         # Open, reconvolve, copy
         for i in range(len(cuben)):
@@ -3519,13 +3525,14 @@ class Beach:
             # Finally write and close cube
             incubus.writeto(self._tra_fitsnames[i], overwrite = self._tra_overwrite)
 
-            if self._tra_return:
-                tra_returnlist += [incubus]
+            if self._tra_return_astropy:
+                tra_return_astropylist += [incubus]
             else:
                 incubus.close()
 
-        if self._tra_return:
-            return tra_returnlist
+        if self._tra_return_astropy:
+            self.tra_astropy = tra_return_astropylist
+            return tra_return_astropylist
         else:
             return
 
@@ -4775,6 +4782,48 @@ def testing():
     print()
     print('Created output plots')
     print()
+
+def description():
+    """
+    Describing the class's properties
+    """
+    return '' + \
+        'This module is a radioastronomical tool. Its purpose is to transform a set of images with known resolution, which may vary from image to image, into a set of images with the same resolution (by choice relative to a frequency reference frame, see below):
+
+The resolution of a radioastronomical image is usually represented by a two-dimensional Gaussian, the (clean) beam, whose properties are known, and which is described by having an amplitude of 1 and a major- and minor axis of the ellipse at its half-power level (major axis "half-power-beam-width" (HPBW), or minor axis HPBW), as well as the position angle of the major axis (measuered anticlockwise from the North). The intensity (spectral brightness) in radioastronomical images is assumed to be the true sky brightness convolved with the individual Gaussians. 
+
+The module takes two sets of images or spectroscopic data cubes in FITS format as an input. One is assumed to contain (part of) the sky brightness convolved with a beam (a "restored image" or a "resiudual"), the other is assumed to be a sky model, which is not yet convolved with the beam. Equolver re-convolves each image/plane in the first data set to a common beam, or a set of common beams, which can be shared among all cubes, all planes, or within individual cubes. whose properties can be derived from the statistics of the known beams. To do so, the images are Fourier-transformed, then divided by the Fourier-transform of the original beam, multiplied with the Fourier-transform of the target beam, and Fourier-transformed back. Alternatively the images are scaled with the integral of the target beam (the target beam-solid-angle, BSA) divided by the BSA of the original beam. Hybrid approaches are also possible, see below. The images/planes in the second data set (the model) only get convolved with the target beam. Then both images are added.
+
+The module potentially goes through four steps, with the parameter prefixes indicating to which step they belong:
+
+  - Reading cubes (gen\'inc\'ubus)
+  - Reading the beam information (gen\'bin\'fo)
+  - Generating beam statistics (gen\'bst\'ats)
+  - Generating (interactive) histograms for diagnostics (gen\'hist\'oplots)
+  - Generating (a) common beam(s) from statistics or direct input (gen\'tar\'get)
+  - Generate a set of transformed images from the input with the beam properties derived (gen\'tra\'ns)
+
+If present, the beam properties of the individual images (planes) are read from the FITS headers, in which they have a format BMAJ_NNN, BMIN_NNN, BPA_NNN, where NNN is the plane number, starting with 1.'
+def parsing():
+    parser = argparse.ArgumentParser(description='Convolve fits images and data cubes to the same resolution.', prog='equolver', usage='%(prog)s [options]', epilog = 'Very long description', fromfile_prefix_chars='@', argument_default=argparse.SUPPRESS)
+    parser.add_argument('--version', action = 'version', version = version)
+    parser.add_argument('--inc_cubes', '-i', help='Input cubes: names or list of names, python style')
+
+    # genbinput
+    parser.add_argument('--bin_bmaj',             help='Beam major axis default value(s), format see below')
+    parser.add_argument('--bin_bmaj_replace',     help='Enforce usage of default values bin_bmaj? (True = yes)' )
+    parser.add_argument('--bin_bmin',             help='Beam minor axis default value(s), format see below'                       )
+    parser.add_argument('--bin_bmin_replace',     help='Enforce usage of default values bin_bmin? (True = yes)' )
+    parser.add_argument('--bin_bpa',              help='Beam position angle default value(s), format see below'                   )
+    parser.add_argument('--bin_bpa_replace',      help='Enforce usage of default values bin_bpa? (True = yes)'  )
+    parser.add_argument('--bin_restfreq',         help='Rest frequency default value(s), format see below'                        )
+    parser.add_argument('--bin_restfreq_replace', help='Enforce usage of default values bin_restfreq?'          )
+    parser.add_argument('--bin_normfreq',         help='Frequency in Hz to normalize beam to if mode is \'frequency\'')
+    whatnot = parser.parse_args()
+    print(vars(whatnot))
+    return True
     
 if __name__ == '__main__':
-    testing()
+    #testing()
+    kwargs = parsing()
+    
