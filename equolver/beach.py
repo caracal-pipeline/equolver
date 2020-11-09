@@ -15,6 +15,9 @@ import bokeh.plotting as bokeh_plotting
 import bokeh.models as bokeh_models
 import bokeh.layouts as bokeh_layouts
 import bokeh.io as bokeh_io
+import argparse
+
+version = '0.0.0'
 
 class Beach:
     """
@@ -55,7 +58,7 @@ class Beach:
                        gentrans_exe = True, tra_modelnames = None, tra_fitsnames = None,
                        tra_mode = 'mask', tra_hdmode = True, tra_tol = 2,
                        tra_overwrite = False, 
-                       tra_commonbeam = True, tra_indibeam = True, tra_return = False,
+                       tra_commonbeam = True, tra_indibeam = True, tra_return_astropy = False,
                        threads = 1, verb = False):
         """Private instance variables:
         (multiple: None, a float, a list of floats, a numpy array, 
@@ -138,7 +141,8 @@ class Beach:
         for para in ['bin_bmaj', 'bin_bmaj_replace', 'bin_bmin',
                      'bin_bmin_replace', 'bin_bpa',
                      'bin_bpa_replace', 'bin_restfreq',
-                     'bin_restfreq_replace']
+                     'bin_restfreq_replace']:
+            self.__dict__['_'+para] = copy.deepcopy(locals()[para])
 
         if genbstats_exe:
             self._genbstats_exe = True
@@ -174,7 +178,7 @@ class Beach:
         for para in [ 'gentrans_exe', 'tra_modelnames',
                       'tra_fitsnames', 'tra_mode', 'tra_hdmode', 'tra_tol',
                       'tra_overwrite', 'tra_commonbeam',
-                      'tra_indibeam', 'tra_return']:
+                      'tra_indibeam', 'tra_return_astropy']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
             
         if self._gentrans_exe:
@@ -253,7 +257,9 @@ class Beach:
         self._tra_overwrite = None
         self._tra_commonbeam = None
         self._tra_indibeam = None
-        self._tra_return = None
+        self._tra_return_astropy = None
+
+        self.tra_astropy = None
 
         self._threads = None
         self._verb = True
@@ -1273,25 +1279,25 @@ class Beach:
         return
 
     @property
-    def tra_return(self):
+    def tra_return_astropy(self):
         """
-        Return a copy of tra_return
+        Return a copy of tra_return_astropy
         """
-        return self._tra_return
+        return self._tra_return_astropy
 
-    @tra_return.setter
-    def tra_return(self, value):
+    @tra_return_astropy.setter
+    def tra_return_astropy(self, value):
         """
-        Set tra_return
+        Set tra_return_astropy
         """
-        self._tra_return = value
+        self._tra_return_astropy = value
         if self._gentrans_exe:
             self.gentrans(verb = False)
         return
 
-    @tra_return.deleter
-    def tra_return(self):
-        self._tra_return = False
+    @tra_return_astropy.deleter
+    def tra_return_astropy(self):
+        self._tra_return_astropy = False
         return
 
     @property
@@ -1492,8 +1498,7 @@ class Beach:
         return
 
     def _getdefault(self, inquant, quantname = None):
-        """
-        Fill target quantname, wich is the name of an instance
+        """Fill target quantname, wich is the name of an instance
         variable, with the content of inquant or return formatted
         inquant
         
@@ -1503,21 +1508,22 @@ class Beach:
         inquant (multiple): input
         quantname (str)   : Name of quantity (without leading _)
 
-        self._quantname is assumed to be a list of linear ndarrays of
-        the size of naxis3 of self._headers (i.e. the number of
-        channels), which should be filled with the default values for
-        bin_bmaj, bmin, etc., following the same expansion scheme. If
-        inquant is None, the call is ignored, if it is a single
-        (float) number (including np.nan), all fields in the output
-        are filled with that number, if it is a list of numbers
-        (including np.nan) each ndarray in the output list is filled
-        with the corresponding number, if it is an ndarray, every
-        array in the output list is filled with this ndarray, and
-        finally, if a list of ndarrays is provided, the output will
-        completely be filled with the input. An input list has always
-        to have as many elements as self._headers and an ndarray always
-        has to have the same dimension as the naxis3 of the
-        corresponding cube.
+        The output is assumed to be a list of linear ndarrays of the
+        size of naxis3 of self._headers (i.e. the number of channels),
+        which should be filled with the default values for bin_bmaj,
+        bmin, etc., following the same expansion scheme. If inquant is
+        None, the call is ignored, if it is a single (float) number
+        (including np.nan), all fields in the output are filled with
+        that number, if it is a list of numbers (including np.nan)
+        each ndarray in the output list is filled with the
+        corresponding number, if it is an ndarray, every array in the
+        output list is filled with this ndarray, and finally, if a
+        list of ndarrays is provided, the output will completely be
+        filled with the input. An input list has always to have as
+        many elements as self._headers and an ndarray always has to
+        have the same dimension as the naxis3 of the corresponding
+        cube. If quantname is not none, the instance variable
+        self._quantname is filled with the output.
 
         """
 
@@ -3154,7 +3160,7 @@ class Beach:
                          None, tra_mode = None, tra_hdmode = None,
                          tra_tol = None, tra_commonbeam = None,
                          tra_indibeam = None, tra_overwrite = None,
-                         tra_return = None, threads = None, verb = True):
+                         tra_return_astropy = None, threads = None, verb = True):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -3176,7 +3182,7 @@ class Beach:
     def gentrans(self, tra_modelnames = None, tra_fitsnames = None,
                  tra_mode = None, tra_hdmode = None, tra_tol = None,
                  tra_commonbeam = None, tra_indibeam = None,
-                 tra_indimode = None, tra_overwrite = None, tra_return
+                 tra_indimode = None, tra_overwrite = None, tra_return_astropy
                  = None, threads = None, verb = True):
         """(De-)convolve input data cubes or images to target beam shapes
 
@@ -3202,7 +3208,7 @@ class Beach:
         tra_overwrite (bool)               : Overwrite output if
                                              already existent
                                              (True: yes)?
-        tra_return (bool)                  : Return list of astropy hdulists?
+        tra_return_astropy (bool)                  : Return list of astropy hdulists?
                                              (True: yes)
         threads (bool)                     : Number of threads
 
@@ -3251,8 +3257,8 @@ class Beach:
                                      tra_tol, tra_overwrite =
                                      tra_overwrite, tra_commonbeam =
                                      tra_commonbeam, tra_indibeam =
-                                     tra_indibeam, tra_return =
-                                     tra_return, verb = verb, threads
+                                     tra_indibeam, tra_return_astropy =
+                                     tra_return_astropy, verb = verb, threads
                                      = threads)
         if stop:
             if verb or self._verb:
@@ -3314,8 +3320,8 @@ class Beach:
         print()
 
         # Check if the method is supposed to return a value
-        if self._tra_return:
-            tra_returnlist = []
+        if self._tra_return_astropy:
+            tra_return_astropylist = []
         
         # Open, reconvolve, copy
         for i in range(len(cuben)):
@@ -3519,13 +3525,14 @@ class Beach:
             # Finally write and close cube
             incubus.writeto(self._tra_fitsnames[i], overwrite = self._tra_overwrite)
 
-            if self._tra_return:
-                tra_returnlist += [incubus]
+            if self._tra_return_astropy:
+                tra_return_astropylist += [incubus]
             else:
                 incubus.close()
 
-        if self._tra_return:
-            return tra_returnlist
+        if self._tra_return_astropy:
+            self.tra_astropy = tra_return_astropylist
+            return tra_return_astropylist
         else:
             return
 
@@ -4775,6 +4782,129 @@ def testing():
     print()
     print('Created output plots')
     print()
+
+def description():
+    """
+    Describing the class's properties
+    """
+    return '' + \
+        """This module is a radioastronomical tool. Its purpose is to transform a set of images with known resolution, which may vary from image to image, into a set of images with the same resolution (by choice relative to a frequency reference frame, see below):
+
+The resolution of a radioastronomical image is usually represented by a two-dimensional Gaussian, the (clean) beam, whose properties are known, and which is described by having an amplitude of 1 and a major- and minor axis of the ellipse at its half-power level (major axis "half-power-beam-width" (HPBW), or minor axis HPBW), as well as the position angle of the major axis (measuered anticlockwise from the North). The intensity (spectral brightness) in radioastronomical images is assumed to be the true sky brightness convolved with the individual Gaussians. In the following, parameters or quantities with suffixes, mediumfixes, or prefixes \'bmaj\' or \'BMAJ\' are related to the beam major axis HPBW, parameters or quantities with suffixes, mediumfixes, or prefixes \'bmin\' or \'BMIN\' are related to the beam major axis HPBW, parameters or quantities with suffixes, mediumfixes, or prefixes \'bpa\' or \'BPA\' are related to the beam majore axis position angle.
+
+The module takes two sets of images or spectroscopic data cubes in FITS format as an input. One is assumed to contain (part of) the sky brightness convolved with a beam (a "restored image" or a "resiudual"), the other is assumed to be a sky model, which is not yet convolved with the beam. Equolver re-convolves each image/plane in the first data set to a common beam, or a set of common beams, which can be shared among all cubes, all planes, or within individual cubes. whose properties can be derived from the statistics of the known beams. To do so, the images are Fourier-transformed, then divided by the Fourier-transform of the original beam, multiplied with the Fourier-transform of the target beam, and Fourier-transformed back. Alternatively the images are scaled with the integral of the target beam (the target beam-solid-angle, BSA) divided by the BSA of the original beam. Hybrid approaches are also possible, see below. The images/planes in the second data set (the model) only get convolved with the target beam. Then both images are added.
+
+In the following we provide a detailed description of the module and its input parameters. In some cases, the manual refers to lists as input parameters. Those are entered in Python style, as comma-separated lists of values enclosed by opening and closing brackets. Strings not entered inside a list can be entered without quotes, inside lists, strings should be enclosed by single- and double quotes. As many shell interpreters would interpret quotes themselves, the user has to take care for the right format. If the user wants e.g. to enter the list ['foo', 'fooly'], on the command line in bash or csh this may have to be entered as e.g. --parameter "['foo', 'fooly']" (notice the double quotes).
+
+The module potentially goes through four steps, with the parameter prefixes indicating to which step they belong:
+
+  - Reading cubes (gen\'inc\'ubus)
+  - Reading the beam information (gen\'bin\'fo)
+  - Generating beam statistics (gen\'bst\'ats)
+  - Generating (interactive) histograms for diagnostics (gen\'hist\'oplots)
+  - Generating (a) common beam(s) from statistics or direct input (gen\'tar\'get)
+  - Generate a set of transformed images from the input with the beam properties derived (gen\'tra\'ns)
+
+Reading cubes (gen\'inc\'ubus):
+The user specifies the input cubes meant to be re-convolved with --inc_cubes INC_CUBES or -i INC_CUBES, where INC_CUBES is either a string with the name of the single data cube (image) or a list of strings with the names of the cubes (images).
+
+Expansion scheme for parameters:
+Some parameters can take multiple formats, referring to the input list of cubes/images: The user can enter single values for all planes in all cubes/images. The user can instead enter lists, where each value of the list corresponds to all planes in a data cube with the same index. If the user enters a list of lists, each member of the list (which is also a list) corresponds to a data cube/image with the same index, and its elements correspond to the planes in the corresponding data cube. Values can be entered in astropy syntax as strings of as floats, where the units are degrees or Hz.
+
+Example:
+
+cube1.fits and cube2.fits each contain 3 planes (with indices from 0 to 2), and the user specifies -i "['cube1', 'cube2']". 
+  - The user specifies --bin_bmaj 0.002 -> for all planes in both cubes the input bmaj is 0.002 degrees
+  - The user specifies --bin_bmaj "[0.002, '1 arcmin']" -> for all planes in cube1.fits the input bmaj is 0.002 degrees, for all planes in cube2.fits the input bmaj is 1 arcminute.
+  - The user specifies --bin_bmaj "[[0.01, 0.02, 0.03], [0.04, 0.05, 0.06]]" -> input bmaj is 0.01 deg for cube1.fits plane 0, 0.02 deg for cube1.fits plane 1, 0.03 deg for cube1.fits plane 2, 0.04 deg for cube2.fits plane 0, 0.05 deg for cube2.fits plane 1, 0.06 deg for cube2.fits plane 2.
+
+Reading the beam information (gen\'bin\'fo):
+If present, the beam properties of the individual images (planes) are read from the FITS headers of INC_CUBES (see \'Reading cubes\'), in which they have a format BMAJ_NNN, BMIN_NNN, BPA_NNN, where NNN is the plane number, starting with 1. If the keywords BMAJ, BMIN, BPA (without suffix) are present in the header, they serve as a default value for the respective plane-specific specifications. Alternatively, the user can directly provide the default values using --bin_bmaj BIN_BMAJ, --bin_bmin BIN_BMIN, and --bin_bpa BIN_BPA, following the expansion scheme for parameters: using this direct input, the user can provide one number for all channels and cubes/images, a list of numbers, providing one number per cube, and a list of lists, providing a list of numbers (per channel) for each cube. If --bin_bmaj_replace True is set, the header values BMAJ or BMAJ_NNN in the data cubes are ignored and the input ("default") values are read in instead. If --bin_bmin_replace True is set, the header values BMIN or BMIN_NNN in the data cubes are ignored and the input ("default") values are read in instead. If --bin_bpa_replace True is set, the header values BPA or BPA_NNN in the data cubes are ignored and the input ("default") values are read in instead. 
+
+By nature, the third axis of a radiointerferometric data cube is either frequency, or velocity. Equolver interprets any velocity as radio velocity VRAD with respect to a rest frequency nu0: VRAD = c*(nu0-nu)/nu0, where c is the speed of light and nu the frequency in a specific channel. The rest frequency nu0 is read from the header of each cube using the keyword 'RESTFREQ'. Defaults can be entered using the parameter --bin_restfreq BIN_RESTFREQ, which can be entered using the expansion scheme, and enforcing the usage of this direct input can be achieved by setting --bin_restfreq_replace True . 
+
+In a radio observation, without adding any additional weighting scheme for the visibilities that changes with frequency, the beam major and minor axes scale with the inverse of the frequency. With equolver, the user has the possibility to scale the beam to a 'normalisation' frequency before deriving statistics and/or scaling it back to the specific frequency per channel. This way, a common beam for the normalisation frequency can be calculated to then scale this beam to the specific channels, to then reconvolve the cube planes. With the parameter --bin_normfreq BIN_NORMFREQ (defaulting to 1.4 GHz) the user can enter this normalisation frequency. With the normalisation-frequency nf (see above), assuming that the beam sizes scale with 1/frequency we derive b(nf) = b(f)*f/nf , where b is major or minor axis HPBW. Also this parameter is expandable, but we strongly recommend not to use more than one value for all data cubes.
+
+
+Generating beam statistics (gen\'bst\'ats)
+After reading the beam information, the user can generate statistics on the collected beam properties. The parameters --bst_parameter BST_PARAMETER, --bst_scaling BST_SCALING, --bst_sample BST_SAMPLE, and --bst_stype BST_STYPE determine which statistics are being calculated (by default all statistics are calculated, but a choice can accelerate the processing time). If for any of the parameters 'all' is chosen (which is the default), all fields are filled. If the scaling type is 'constant', the given (read) values for bmaj and bmin are evaluated, if 'frequency' is chosen, all beam sizes are scaled to the same normalisation-frequency nf (see above), assuming that the beam sizes scale with 1/frequency. b(nf) = b(f)*f/nf . In the following, bsa is the beam solid angle of an individual (or average) beam, ceb the circular equivalent beam, the circular beam with a beam solid angle of bsa (sqrt(bmaj*bmin)). The parameters can be combined, and the following can be calculated:
+        --bst_parameter BST_PARAMETER
+            BST_PARAMETER:
+              'bmaj' major axis dispersions/hpbws
+              'bmin' minor axis dispersions/hpbws
+              'bpa'  beam position angles
+              'bsa'  beam solid angle
+              'ceb'  circular equivalent beam dispersions/hpbws
+        --bst_scaling BST_SCALING
+            BST_SCALING:
+              'const'     constant
+              'frequency' frequency
+        --bst_stype BST_STYPE
+            BST_STYPE:
+              'minimum'    Minimum
+              'maximum'    Maximum
+              'average'    Average
+              'stdev'      Standard deviation
+              'median'     Median
+              'mad'        Median-absolute-deviation
+              'madstdev'   Standard deviation calculated from the median-absolute-deviation
+              'percentile' Score at percents
+              'commonbeam' Common beam as calculated using the radio-beam module (https://radio-beam.readthedocs.io) based on the Khachiyan algorithm (https://en.wikipedia.org/wiki/Ellipsoid_method). Parameters bst_tolerance, bst_nsamps, epsilon are used for this method
+        --bst_sample BST_SAMPLE
+            BST_SAMPLE:
+            'cube'  statistics to be carried out for all channels per cube (generates lists with length of the number of input cubes)
+            'chan'  statistics to be carried out for all cubes per channel (generates lists with a length of the maximum number of channels in any cube)
+            'total' statistics to be carried out for all channels in all cubes (generates a float)
+
+For some of those parameters, additional arguments are required. --bst_percents BST_PERCENTS is the number of percents for the percentile statistics, while --bst_tolerance BST_TOLERANCE, --bst_nsamps BST_NSAMPS, and --bst_epsilon are specific to the calculation of a common beam (see above).  
+
+"""
+
+def parsing():
+    parser = argparse.ArgumentParser(description='Convolve fits images and data cubes to the same resolution.', prog='equolver', usage='%(prog)s [options]', epilog = 'Very long description', fromfile_prefix_chars='@', argument_default=argparse.SUPPRESS)
+    parser.add_argument('--version', action = 'version', version = version)
+    parser.add_argument('--inc_cubes', '-i', help='Input cubes: names or list of names, python style')
+
+    # genbinput
+    parser.add_argument('--bin_bmaj',             help='Beam major axis default value(s), format see below')
+    parser.add_argument('--bin_bmaj_replace',     help='Enforce usage of default values bin_bmaj? (True = yes)' )
+    parser.add_argument('--bin_bmin',             help='Beam minor axis default value(s), format see below'                       )
+    parser.add_argument('--bin_bmin_replace',     help='Enforce usage of default values bin_bmin? (True = yes)' )
+    parser.add_argument('--bin_bpa',              help='Beam position angle default value(s), format see below'                   )
+    parser.add_argument('--bin_bpa_replace',      help='Enforce usage of default values bin_bpa? (True = yes)'  )
+    parser.add_argument('--bin_restfreq',         help='Rest frequency default value(s), format see below'                        )
+    parser.add_argument('--bin_restfreq_replace', help='Enforce usage of default values bin_restfreq?'          )
+    parser.add_argument('--bin_normfreq',         help='Frequency in Hz to normalize beam to if mode is \'frequency\'')
+    parser.add_argument('--bst_parameter',        help='Parameter name (\'all\', \'bmaj\', \'bmin\', \'bpa\', \'bsa\', \'ceb\')')
+    parser.add_argument('--bst_scaling',          help='Scaling type (\'all\', \'constant\', \'frequency\')')
+    parser.add_argument('--bst_stype',            help='Type of statistics to calculate (\'all\', \'minimum\', \'maximum\', \'average\', \'stdev\', \'median\', \'mad\', \'madstdev\', \'percentile\', \'percents\', \'combeam\')')
+    parser.add_argument('--bst_sample',           help='Sample(s) to calculate statistics on (\'all\', \'cube\', \'chan\', \'total\')')
+    parser.add_argument('--bst_percents',         help='Percents for the percentile statistics')
+    parser.add_argument('--bst_tolerance',        help='Tolerance for the common beam')
+    parser.add_argument('--bst_nsamps',           help='Number of edges of beam for common beam')
+    parser.add_argument('--bst_epsilon',          help='Epsilon for common beam')
+
+    whatnot = parser.parse_args()
+    inpars = vars(whatnot)
+    print(inpars)
+
+    for key in inpars.keys():
+        try:
+            result = eval(inpars[key])
+        except:
+            result = inpars[key]
+        inpars[key] = result
+
+
+    ###
+    if 'inc_cubes' in inpars.keys():
+        print(inpars['inc_cubes'])
+        if inpars['inc_cubes'] == True:
+            print('yo')
+        
+    return inpars
     
 if __name__ == '__main__':
-    testing()
+    #testing()
+    kwargs = parsing()
+    
