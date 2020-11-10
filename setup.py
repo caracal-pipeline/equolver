@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#import os
+import os
 
 try:
     from setuptools import setup
@@ -30,7 +30,7 @@ setup(name=PACKAGE_NAME,
       install_requires=requirements,
       include_package_data=True,
       # package_data - any binary or meta data files should go into MANIFEST.in
-      #scripts=["bin/" + j for j in os.listdir("bin")],
+      scripts=["bin/" + j for j in os.listdir("bin")],
       license=["GNU GPL v3"],
       classifiers=[
           "Development Status :: 3 - Alpha",
