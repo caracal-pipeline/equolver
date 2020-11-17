@@ -42,8 +42,8 @@ class Beach:
                        bst_scaling = 'all',
                        bst_stype = 'all',
                        bst_sample = 'all', bst_percents = 90,
-                       bst_tolerance = 0.0001, bst_nsamps = 200, bst_epsilon = 0.0005,
-                       bst_maxiter = 1000,
+                       bst_tolerance = 0.001, bst_nsamps = 200, bst_epsilon = 0.0005,
+                       bst_maxiter = 1000000,
                        hist_plotname = None, hist_interactive = None, 
                        hist_sample = 'total', hist_scaling = 'frequency',
                        hist_n_per_bin = 5, hist_overwrite = False,
@@ -59,8 +59,8 @@ class Beach:
                        tar_scaling = 'frequency', genbstats_exe = True,
                        gentarget_exe = True,
                        gentrans_exe = True, tra_modelnames = None, tra_fitsnames = None,
-                       tra_mode = 'mask', tra_hdmode = True, tra_tol = 2,
-                       tra_overwrite = False, 
+                       tra_mode = 'mask', tra_hdmode = True, tra_tol = 0.0001,
+                       tra_overwrite = False, tra_maxker = 1E7,
                        tra_commonbeam = True, tra_indibeam = True, tra_return_astropy = False,
                        threads = 1, verb = False):
         """Private instance variables:
@@ -165,7 +165,7 @@ class Beach:
                      'hist_overwrite', 'hist_sample',
                      'hist_scaling', 'hist_overwrite', 'hist_n_per_bin']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
-           
+
         self.genhistoplots(verb = self._verb)
 
         for para in [ 'tar_bmaj_inter', 'tar_bmaj_slope',
@@ -180,7 +180,7 @@ class Beach:
             
         for para in [ 'gentrans_exe', 'tra_modelnames',
                       'tra_fitsnames', 'tra_mode', 'tra_hdmode', 'tra_tol',
-                      'tra_overwrite', 'tra_commonbeam',
+                      'tra_maxker', 'tra_overwrite', 'tra_commonbeam',
                       'tra_indibeam', 'tra_return_astropy']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
             
@@ -258,6 +258,7 @@ class Beach:
         self._tra_mode = None
         self._tra_hdmode = None
         self._tra_tol = None
+        self._tra_maxker = None
         self._tra_overwrite = None
         self._tra_commonbeam = None
         self._tra_indibeam = None
@@ -1238,6 +1239,28 @@ class Beach:
     @tra_tol.deleter
     def tra_tol(self):
         self._tra_tol = 2.
+        return
+    
+    @property
+    def tra_maxker(self):
+        """
+        Return a copy of _tra_maxker
+        """
+        return self._tra_maxker
+
+    @tra_maxker.setter
+    def tra_maxker(self, value):
+        """
+        Set tra_maxker
+        """
+        self._tra_maxker = copy.deepcopy(value)
+        if self._gentrans_exe:
+            self.gentrans(verb = False)
+        return
+
+    @tra_maxker.deleter
+    def tra_maxker(self):
+        self._tra_maxker = 1E7
         return
 
     @property
@@ -2640,6 +2663,8 @@ class Beach:
             # Unit of this one has to be deg
             bpa=array[:,2] * u.deg
 
+            print('bmaj', bmaj)
+            
             my_beams = radio_beam.Beams(bmaj, bmin, bpa)
 
             repeat = True
@@ -3198,9 +3223,10 @@ class Beach:
 
     def _initgentransvar(self, tra_modelnames = None, tra_fitsnames =
                          None, tra_mode = None, tra_hdmode = None,
-                         tra_tol = None, tra_commonbeam = None,
-                         tra_indibeam = None, tra_overwrite = None,
-                         tra_return_astropy = None, threads = None, verb = True):
+                         tra_tol = None, tra_maxker = None,
+                         tra_commonbeam = None, tra_indibeam = None,
+                         tra_overwrite = None, tra_return_astropy =
+                         None, threads = None, verb = True):
         """
         Check existence of variables, return True if a parameter is ill defined
         """
@@ -3223,7 +3249,7 @@ class Beach:
                  tra_mode = None, tra_hdmode = None, tra_tol = None,
                  tra_commonbeam = None, tra_indibeam = None,
                  tra_indimode = None, tra_overwrite = None, tra_return_astropy
-                 = None, threads = None, verb = True):
+                 = None, tra_maxker = None, threads = None, verb = True):
         """(De-)convolve input data cubes or images to target beam shapes
 
         Input:
@@ -3250,6 +3276,10 @@ class Beach:
                                              (True: yes)?
         tra_return_astropy (bool)                  : Return list of astropy hdulists?
                                              (True: yes)
+
+        tra_maxker (float):                  Maximum value that the FT of the 
+                                             convolution kernel can assume, will
+                                             assume failure if larger
         threads (bool)                     : Number of threads
 
         Serially opens all cubes (images) listed in inputnames and
@@ -3261,10 +3291,12 @@ class Beach:
         None. 
 
         A (de-)convolution is declared a success or a failure by
-        comparing the sum of the inner quarter in a plane divided by
-        the beam. If the ratio of the larger sum divided by the
-        smaller sum is larger than tra_tol, the (de-)convolution
-        has failed.
+        comparing the sums of a plane divided by the beam. If the
+        ratio of the larger sum divided by the smaller sum is larger
+        than tra_tol, the (de-)convolution has failed. In addition,
+        tra_maxker allows the user to manually set the maximum
+        exponent in the FT of a kernel as an alternative way to decide
+        whether a reconvolution is bound to fail.
 
         The mode of the deconvolution is determined by parameter
         tra_mode as follows:
@@ -3297,9 +3329,10 @@ class Beach:
                                      tra_tol, tra_overwrite =
                                      tra_overwrite, tra_commonbeam =
                                      tra_commonbeam, tra_indibeam =
-                                     tra_indibeam, tra_return_astropy =
-                                     tra_return_astropy, verb = verb, threads
-                                     = threads)
+                                     tra_indibeam, tra_return_astropy
+                                     = tra_return_astropy, tra_maxker
+                                     = tra_maxker, verb = verb,
+                                     threads = threads)
         if stop:
             if verb or self._verb:
                 warnings.warn('Parameters missing. Not generating output data'+ \
@@ -3387,6 +3420,7 @@ class Beach:
             planeinfo = {}
             
             for plane in range(incubus_image.shape[0]):
+                print()
                 if type(cuben[i]) == type(''):
                     print('Processing {:s} plane {:d}'.format(cuben[i],plane))
                 else:
@@ -3395,16 +3429,20 @@ class Beach:
                 targetbeam = self._binfo_target[i][plane,:]
                 originplane = incubus_image[plane,:,:]
                 targetplane = outcubus_image[plane,:,:]
+                print('HPBW in pixels PA in deg, bmaj, bmin, bpa: {:.1f} {:.1f} {:.1f} -> {:.1f} {:.1f} {:.1f}'.format(originbeam[0]*np.sqrt(np.log(256.)),originbeam[1]*np.sqrt(np.log(256.)),180.*originbeam[2]/np.pi,targetbeam[0]*np.sqrt(np.log(256.)),targetbeam[1]*np.sqrt(np.log(256.)),180.*targetbeam[2]/np.pi))
+
                 if self._tra_mode == 'scale':
 
                     # Scale by the area of the beam
-                    targetplane = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
+                    targetplane[:] = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
 
                 else:
                     
                     # Attempt to convolve
-                    self._reconvolve(originplane, targetplane, originbeam,
-                                     targetbeam, threads = self._threads)
+                    self._reconvolve(originplane, targetplane,
+                                     originbeam, targetbeam, threads =
+                                     self._threads, maxker =
+                                     self._tra_maxker)
 
                     failure = False
                     
@@ -3415,11 +3453,13 @@ class Beach:
                         # Asses success: the inner quarter of the image
                         # should approximately show the same sum,
                         # normalised by the beam size
-                        originflux = originplane[originplane.shape[0]//4:3*originplane.shape[0]//4,
-                                    originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])
-                        targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,
-                                    targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])
-                        failure = np.amax([originflux, targetflux])/np.amin([originflux, targetflux]) > self._tra_tol
+                        #originflux = originplane[originplane.shape[0]//4:3*originplane.shape[0]//4,
+                        #            originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])
+                        #targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,
+                        #            targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])
+                        originflux = originplane.sum()/(originbeam[0]*originbeam[1])
+                        targetflux = targetplane.sum()/(targetbeam[0]*targetbeam[1])
+                        failure = np.amax([np.fabs(originflux), np.fabs(targetflux)])/np.amin([np.fabs(originflux), np.fabs(targetflux)]) > self._tra_tol+1.
 
                     if failure:
                         if type(cuben[i]) == type(''):
@@ -3432,54 +3472,73 @@ class Beach:
                             targetplane[:] = np.nan
                             
                         if self._tra_mode == 'hybrid':
-                            print('Scaling instead\n')
-                            targetplane = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
+                            print('Scaling instead')
+                            targetplane[:] = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
                             planeinfo['EQS_{:d}'.format(plane+1)] = 'SCALE'
-                            targetplane[:] = np.nan
+                            #targetplane[:] = np.nan
                             
                         if self._tra_mode == 'max':
-                            print('Using hybrid approach\n')
+                            print('Max approach')
 
                             # Target beam is smaller or oriented differentely than origin beam
                             # Find out if bmin in targetbeam is larger than bmin in originbeam
                             if targetbeam[1] > originbeam[1]:
 
+                                print('HPBW in pixels PA in deg, bmaj, bmin, bpa: {:.1f} {:.1f} {:.1f} -> {:.1f} {:.1f} {:.1f}'.format(originbeam[0]*np.sqrt(np.log(256.)),originbeam[1]*np.sqrt(np.log(256.)),180.*originbeam[2]/np.pi,originbeam[0]*np.sqrt(np.log(256.)),targetbeam[1]*np.sqrt(np.log(256.)),180.*originbeam[2]/np.pi))
+
                                 # Then we can go half way, we convolve to the same minor beam,
                                 # but not more
-                                self._reconvolve(originplane, targetplane, originbeam,
-                                                 [originbeam[0], targetbeam[1], originbeam[2]], threads = self._threads)
+                                self._reconvolve(originplane,
+                                                 targetplane,
+                                                 originbeam,
+                                                 [originbeam[0],
+                                                  targetbeam[1],
+                                                  originbeam[2]],
+                                                 maxker =
+                                                 self._tra_maxker,
+                                                 threads =
+                                                 self._threads)
 
                                 # Check again
                                 if np.isfinite(targetplane).astype(int).sum() < targetplane.size:
+                                    print('This here')
                                     failure_again = True
                                 else:
                                     # Asses success: the inner quarter of the image
                                     # should approximately show the same sum,
                                     # normalised by the beam size
-                                    orginflux = originplane[originplane.shape[0]//4:3* originplane.shape[0]//4,
-                                                originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])
-                                    targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,
-                                                targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])
-                                    failure_again = np.amax([orginflux, targetflux])/np.amin([originflux, targetflux]) > self._tra_tol
+                                    #orginflux = originplane[originplane.shape[0]//4:3* originplane.shape[0]//4,
+                                    #            originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])
+                                    #targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,
+                                    #            targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])
+                                    originflux = originplane.sum()/(originbeam[1])
+                                    targetflux = targetplane.sum()/(targetbeam[1])
+                                    failure_again = np.amax([np.fabs(originflux), np.fabs(targetflux)])/np.amin([np.fabs(originflux), np.fabs(targetflux)]) > self._tra_tol+1.
 
                                 if failure_again:
                                     if type(cuben[i]) == type(''):
                                         print('{:s} plane {:d}: failed to re-convolve again'.format(cuben[i],plane))
                                     else:
-                                        print('Cube {:d} plane {:d}: failed to re-convolve again'.format(i,plane))                            
+                                        print('Cube {:d} plane {:d}: failed to re-convolve again'.format(i,plane))
+                                    print('Rescaling only.')
                                     
                                     # If we failed again (just a safeguard), we scale only
-                                    targetplane = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
+                                    targetplane[:] = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
                                     planeinfo['EQS_{:d}'.format(plane+1)] = 'SCALE'
 
                                 else:
-                                    print('Applying hybrid approach\n')
+                                    print('Applying hybrid approach')
                                     # If we succeeded we need to scale the rest
-                                    targetplane = targetplane*targetbeam[0]/originbeam[0]
+                                    targetplane[:] = targetplane[:]*targetbeam[0]/originbeam[0]
                                     planeinfo['EQS_{:d}'.format(plane+1)] = 'HYBRID'
-                        print('')
+                            else:
+                                print('Reconvolving not possible, just scalingyo')
+                                # If we succeeded we need to scale the rest
+                                #targetplane[:] = targetplane*targetbeam[1]/originbeam[1]
+                                targetplane[:] = originplane*targetbeam[0]*targetbeam[1]/(originbeam[0]*originbeam[1])
+                                planeinfo['EQS_{:d}'.format(plane+1)] = 'HYBRID'                                
 
-            if type(modeln) != type(None):
+            if type(modeln[0]) != type(None):
                 if type(modeln[i]) == type(''):
                     inmodel = fits.open(modeln[i])
                 else:
@@ -3495,9 +3554,9 @@ class Beach:
                 originbeam = [0.,0.,0.,0.,1.]
                 for plane in range(incubus_image.shape[0]):
                     if type(cuben[i]) == type(''):
-                        print('Processing {:s} plane {:d}'.format(cuben[i],plane))
+                        print('Processing {:s} plane {:d}'.format(modeln[i],plane))
                     else:
-                        print('Processing cube {:d} plane {:d}'.format(i,plane))                            
+                        print('Processing model {:d} plane {:d}'.format(i,plane))                            
                     targetbeam = self._binfo_target[i][plane,:]
                     originplane = inmodel_image[plane,:,:]
                     targetplane = outmodel_image[plane,:,:]
@@ -3584,7 +3643,8 @@ class Beach:
                       1., dispersion_maj_b = np.inf, amplitude_min_b =
                       1., dispersion_min_b = np.inf, signum_maj_b =
                       1., signum_min_b = 1., pa_b = 0., dtype =
-                      'float32', centering = 'origin', forreal = True):
+                      'float32', centering = 'origin', forreal = True,
+                      maxker = 1E300):
         """
         Returns the the product of two Quasi-Gaussians as ndarray
         (positve sign in exponent allowed)
@@ -3636,6 +3696,8 @@ class Beach:
                                   result of a real Fourier 
                                   transformation and hence do not make
                                   the 'origin' assumption for axis 1
+        maxker (float):           Maximum value in return array, returns 
+                                  nan if any pixel gets larger than that.
 
         Calculates the product of four planar quasi-Gaussians
 
@@ -3699,9 +3761,17 @@ class Beach:
         np.seterr(divide = None)
 
         amplitude = amplitude_maj_a*amplitude_min_a*amplitude_maj_b*amplitude_min_b
-        exponent=exponent1a+exponent0a+exponent1b+exponent0b
-        
-        return amplitude*np.exp(0.5*(exponent1a+exponent0a+exponent1b+exponent0b))
+
+        #exponent=exponent1a+exponent0a+exponent1b+exponent0b
+        #if np.isnan(exponent.sum()):
+        #    return exponent1a*np.nan
+        #print(exponent.max())
+        #if exponent.max() > maxex:
+        #    return exponent1a*np.nan
+        rval = amplitude*np.exp(0.5*(exponent1a+exponent0a+exponent1b+exponent0b))
+        if rval.max() > maxker:
+            return rval*np.nan
+        return rval
 
     def _igaussian_2dp(self, naxis1 = 100, naxis2 = 100, cdelt1 = 1.,
                       cdelt2 = 1., amplitude_maj_a = 1.,
@@ -3711,7 +3781,8 @@ class Beach:
                       1., dispersion_maj_b = 0., amplitude_min_b =
                       1., dispersion_min_b = 0., signum_maj_b =
                       1., signum_min_b = 1., pa_b = 0., dtype =
-                      'float32', centering = 'origin', forreal = True):
+                       'float32', centering = 'origin', forreal = True,
+                       maxker = 1E300):
         """Returns the the coefficients of the inverst FT of a product of two Quasi-Gaussians as ndarray
         (positve sign in exponent allowed)
 
@@ -3776,7 +3847,7 @@ class Beach:
                                   signum_maj_b = signum_maj_b, signum_min_b
                                   = signum_min_b, pa_b = pa_b, dtype =
                                   dtype, centering = centering, forreal =
-                                  forreal)
+                                  forreal, maxker = maxker)
 
     def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = 'gaussian_at_centre.fits', gaussian_at_origin = 'gaussian_at_origin.fits', real_fft_conv = 'real_fft_conv.fits', real_fft_conv_calc = 'real_fft_conv_calc.fits', reconvolve_input_image = 'reconvolve_input_image.fits', reconvolve_output_image = 'reconvolve_output_image.fits'):
 
@@ -4246,7 +4317,8 @@ class Beach:
         print('')
         return
     
-    def _reconvolve(self, originplane, targetplane, originbeam, targetbeam, threads = 1):
+    def _reconvolve(self, originplane, targetplane, originbeam,
+                    targetbeam, maxker = 1E300, threads = 1):
         """(De-)convolve an image from an original to a targt resolution
 
         Input:
@@ -4263,6 +4335,9 @@ class Beach:
                                angle, cos position angle) assumed for
                                target
         threads (int)        : Numbers of CPUs to use
+        maxker (float):        Maximum value that the FT of the 
+                               convolution kernel can assume, will
+                               return a nan plane if larger
         
         
         Determines the Fourier transform FT(Go) of the Gaussian kernel
@@ -4289,7 +4364,11 @@ class Beach:
                                       pa_b = targetbeam[2],
                                       dtype = targetplane.dtype,
                                       centering = 'origin',
-                                      forreal = True)
+                                      forreal = True, maxker = maxker)
+
+        if np.isnan(ikernel.sum()):
+            targetplane[:] = np.nan
+            return
 
         # Notice the use of threads as being passed, not from the instance
         fft = pyfftw.builders.rfft2(originplane, planner_effort =
@@ -4497,7 +4576,66 @@ class Beach:
                         
             
             hdu.writeto(outcubi[i], overwrite = overwrite)
+
+    def gentestcubes(self, outcubi_prefix = ['test'], mode = 'gauss', naxis = 4, naxis1 = 257, naxis2 = 513, naxis3 = 4, pixelsize = 8.3333335E-04, ctype3 = 'VRAD', channelwidth = 5000., cellscal = '1/F', amp0 = 1., ainc = 0.0, pinc = 5., bmaj0 = 10., bmin0 = 7., binc = 0., bpa0 = 0, cinc = 0, avbeam = True):
+        """Generate a set of test cubes with Gaussians or point sources
+
+        Parameters:
+        outcubi_prefix (list of str) : Prefixes of output cubes
+        mode (str)                   : 'gauss' or 'point'
+        naxis (int)                  : Number of axes 3 or 4
+        naxis1 (int)                 : Dimension of cube axis 1
+        naxis2 (int)                 : Dimension of cube axis 2
+        naxis3 (int)                 : Dimension of cube axis 3 (# of channels)
+        pixelsize (float)            : Pixelsize in degrees
+        ctype3 (str)                 : Type of axis 3 'VRAD' or 'FREQ'
+        channelwidth (float)         : Channel width (axis 3)
+        cellscal (str)               : CELLSCAL keyword ('CONSTANT' or '1/F')
+        amp0 (float)                 : Amplitude first Gaussian/point source
+        ainc (float)                 : Increment in amplitude
+        pinc (float)                 : Increment in position
+        bmaj0 (float)                : HPBW major axis first Gaussian
+        bmin0 (float)                : HPBW minor axis first Gaussian
+        binc (float)                 : Increment in HPBWs
+        bpa0 (float)                 : Beam position angle first Gaussian
+        cinc (float)                 : Increment of beam position angles
+        avbeam (bool)                : Provide average beam properties
+
+        Creates n = len(outcubi_prefix) cubes with names
+        outcubi_prefix[0]+'.fits', ..., outcubi_prefix[n-1]+'.fits'
+        and sizes naxis1 x naxis2 x naxis3 and one additional fake
+        'STOKES' axis 4. If mode == 'gauss', it will generate Gaussians, if
+        'point' point sources (nearest pixel). The initial
+        Gaussian/point source is centered at the centre of each plane,
+        Then per plane the position changes along axis 1 and axis 2 by
+        pinc pixels, and the amplitude by ainc. The first Gaussian is
+        characterized by the HPBWs bmaj0, bmin0, and bpa0. bmaj and
+        bmin incrase by binc per channel, bpa by cinc.
+
+        """
+        gauprops = []
+        for i in range(len(outcubi_prefix)):
+            planar = np.zeros((naxis3,6))
+            for j in range(naxis3):
+                planar[j, 0] = naxis1//2+(i*naxis3+j)*pinc
+                planar[j, 1] = naxis2//2+(i*naxis3+j)*pinc
+                planar[j, 2] = amp0+(i*naxis3+j)*ainc
+                if mode == 'gauss':
+                    planar[j, 3] = bmaj0+(i*naxis3+j)*binc
+                    planar[j, 4] = bmin0+(i*naxis3+j)*binc
+                    planar[j, 5] = bpa0+(i*naxis3+j)*cinc
+            gauprops.append(planar)
+
+        outcubi = [s + '.fits' for s in outcubi_prefix]
+        if avbeam:
+            bmaj = planar[:, 3].mean()*pixelsize
+            bmin = planar[:, 4].mean()*pixelsize
+            bpa = planar[:, 5].mean()
             
+            self.createstcubes(mode = mode, gauprops = gauprops, outcubi = outcubi, naxis = naxis, naxis1 = naxis1, naxis2 = naxis2, ctype3 = ctype3, channelwidth = channelwidth, cellscal = cellscal, bmaj = bmaj, bmin = bmin, bpa = bpa)
+        else:
+            self.createstcubes(mode = mode, gauprops = gauprops, outcubi = outcubi, naxis = naxis, naxis1 = naxis1, naxis2 = naxis2, ctype3 = ctype3, channelwidth = channelwidth, cellscal = cellscal)
+
 
 def testplot():
     # Log-Normal Distribution
@@ -4527,11 +4665,6 @@ def testplot():
     bokeh_plotting.output_file('Test.html')
     bokeh_plotting.save(q)
 
-    # There is no straightforward method to export plots in a simple
-    # way with bokeh, therefore one needs to add a matplotlib version
-    # as well
-
-       
 def printcubeinfo(cubename):
     print()
     print('###################################')
@@ -4563,65 +4696,274 @@ def printbeachconts(beach):
     print('###############################')
     print()
 
-    print('Input cube 1')
-    print('bmaj      : ', beach.binfo_input[0][:,0])
-    print('bmin      : ', beach.binfo_input[0][:,1])
-    print('bpa       : ', beach.binfo_input[0][:,2])
-    print('freq      : ', beach.binfo_input[0][:,3])
-    print('dx        : ', beach.binfo_input[0][:,4])
-    print('rfreq/freq: ', beach.binfo_input[0][:,5])
-    print('bmaj*freq : ', beach.binfo_input[0][:,6])
-    print('bmin*freq : ', beach.binfo_input[0][:,7])
-    print('Input cube 2')
-    print('bmaj      : ', beach.binfo_input[1][:,0])
-    print('bmin      : ', beach.binfo_input[1][:,1])
-    print('bpa       : ', beach.binfo_input[1][:,2])
-    print('freq      : ', beach.binfo_input[1][:,3])
-    print('dx        : ', beach.binfo_input[1][:,4])
-    print('rfreq/freq: ', beach.binfo_input[1][:,5])
-    print('bmaj*freq : ', beach.binfo_input[1][:,6])
-    print('bmin*freq : ', beach.binfo_input[1][:,7])
+    for i in range(len(beach.binfo_input)):
+        print('Input cube {}'.format(i))
+        print('bmaj      : ', beach.binfo_input[i][:,0])
+        print('bmin      : ', beach.binfo_input[i][:,1])
+        print('bpa       : ', beach.binfo_input[i][:,2])
+        print('freq      : ', beach.binfo_input[i][:,3])
+        print('dx        : ', beach.binfo_input[i][:,4])
+        print('rfreq/freq: ', beach.binfo_input[i][:,5])
+        print('bmaj*freq : ', beach.binfo_input[i][:,6])
+        print('bmin*freq : ', beach.binfo_input[i][:,7])
+        print()
+        print('Pixel cube {}'.format(i))
+        print('bmaj      : ', beach.binfo_pixel[i][:,0])
+        print('bmin      : ', beach.binfo_pixel[i][:,1])
+        print('bpa       : ', beach.binfo_pixel[i][:,2])
+        print('freq      : ', beach.binfo_pixel[i][:,3])
+        print('dx        : ', beach.binfo_pixel[i][:,4])
+        print('rfreq/freq: ', beach.binfo_pixel[i][:,5])
+        print('bmaj*freq : ', beach.binfo_pixel[i][:,6])
+        print('bmin*freq : ', beach.binfo_pixel[i][:,7])
+        print()
+        print('Target cube {}'.format(i))
+        print('bmaj      : ', beach.binfo_target[i][:,0])
+        print('bmin      : ', beach.binfo_target[i][:,1])
+        print('bpa       : ', beach.binfo_target[i][:,2])
+        print('freq      : ', beach.binfo_target[i][:,3])
+        print('dx        : ', beach.binfo_target[i][:,4])
+        print('rfreq/freq: ', beach.binfo_target[i][:,5])
+        print('bmaj*freq : ', beach.binfo_target[i][:,6])
+        print('bmin*freq : ', beach.binfo_target[i][:,7])
+        print()
+
+def gettoflux(incubi):
+    """
+    Derive total flux in a list of cubes
+    """
+    for incubus in incubi:
+        hdul = fits.open(incubus)
+        incubus_data = np.squeeze(hdul[0].data)
+        incubus_header = hdul[0].header
+        pixelsize = hdul[0].header['CDELT2']
+        naxis3 = incubus_data.shape[0]
+
+        output = {}
+
+        for prefix in ['BMAJ', 'BMIN', 'BPA']:
+            # Start with an empty array
+            output[prefix] = np.empty((naxis3,))
+            output[prefix][:] = np.nan
+                    
+            # Go through dict and search for a cubedefault
+            cubedefault = np.nan
+            for key in incubus_header.keys():
+                if key == prefix:
+                    cubedefault = incubus_header[prefix]
+                    break
+
+            # 'Channel' numbers
+            chnum = []
+
+            # Values
+            chval = []
+    
+            # Go through dict and assign numbers
+            for key in incubus_header.keys():
+                if key.startswith(prefix):
+                    if key != prefix:
+                        try:
+                            chnum = int(key[len(prefix):])
+                            try:
+                                chval = float(incubus_header[key])
+                                output[prefix][chnum-1] = chval
+                            except:
+                                pass
+                        except:
+                            pass
+
+            # Now fill remaining nans
+            output[prefix][np.isnan(output[prefix])] = cubedefault
+        for plane in range(naxis3):
+            print('{}: Total flux plane {:d}: {:.3f}'.format(incubus, plane, incubus_data[plane,:].sum()*pixelsize*pixelsize/(2*np.pi/np.log(256.)*output['BMAJ'][plane]*output['BMIN'][plane])))
+
+def test1():
+
     print()
-    print('Pixel cube 1')
-    print('bmaj      : ', beach.binfo_pixel[0][:,0])
-    print('bmin      : ', beach.binfo_pixel[0][:,1])
-    print('bpa       : ', beach.binfo_pixel[0][:,2])
-    print('freq      : ', beach.binfo_pixel[0][:,3])
-    print('dx        : ', beach.binfo_pixel[0][:,4])
-    print('rfreq/freq: ', beach.binfo_pixel[0][:,5])
-    print('bmaj*freq : ', beach.binfo_pixel[0][:,6])
-    print('bmin*freq : ', beach.binfo_pixel[0][:,7])
-    print('Pixel cube 2')
-    print('bmaj      : ', beach.binfo_pixel[1][:,0])
-    print('bmin      : ', beach.binfo_pixel[1][:,1])
-    print('bpa       : ', beach.binfo_pixel[1][:,2])
-    print('freq      : ', beach.binfo_pixel[1][:,3])
-    print('dx        : ', beach.binfo_pixel[1][:,4])
-    print('rfreq/freq: ', beach.binfo_pixel[1][:,5])
-    print('bmaj*freq : ', beach.binfo_pixel[1][:,6])
-    print('bmin*freq : ', beach.binfo_pixel[1][:,7])
-    print()
-    print('Target cube 1')
-    print('bmaj      : ', beach.binfo_target[0][:,0])
-    print('bmin      : ', beach.binfo_target[0][:,1])
-    print('bpa       : ', beach.binfo_target[0][:,2])
-    print('freq      : ', beach.binfo_target[0][:,3])
-    print('dx        : ', beach.binfo_target[0][:,4])
-    print('rfreq/freq: ', beach.binfo_target[0][:,5])
-    print('bmaj*freq : ', beach.binfo_target[0][:,6])
-    print('bmin*freq : ', beach.binfo_target[0][:,7])
-    print('Target cube 2')
-    print('bmaj      : ', beach.binfo_target[1][:,0])
-    print('bmin      : ', beach.binfo_target[1][:,1])
-    print('bpa       : ', beach.binfo_target[1][:,2])
-    print('freq      : ', beach.binfo_target[1][:,3])
-    print('dx        : ', beach.binfo_target[1][:,4])
-    print('rfreq/freq: ', beach.binfo_target[1][:,5])
-    print('bmaj*freq : ', beach.binfo_target[1][:,6])
-    print('bmin*freq : ', beach.binfo_target[1][:,7])
+    print('########################')
+    print('########################')
+    print(' Test 1: Frequency axis')
+    print('########################')
     print()
 
+    incubi = ['test1_incubus1', 'test1_incubus2']
+    incubif = [i+'.fits' for i in incubi]
+    Beach(verb = False).gentestcubes(outcubi_prefix = incubi, ctype3 = 'FREQ', channelwidth = 20000, amp0 = 1., ainc = 0.0, pinc = 5., bmaj0 = 10., bmin0 = 7., binc = 0., bpa0 = 0, cinc = 0)
+    print('Test 1: Created input cubes {:s} and {:s}, with properties:'.format(incubif[0], incubif[1]))
+    printcubeinfo(incubif[0])
+    printcubeinfo(incubif[1])
+    beach = Beach(inc_cubes = incubif, gentrans_exe = False)
+    printbeachconts(beach)
+    print()
+    print('########################')
+
+def test2():
+
+    print()
+    print('#################################')
+    print('#################################')
+    print(' Test 2: Velocity axis and model ')
+    print('#################################')
+    print()
+
+    incubi =  ['test2_incubus1',  'test2_incubus2']
+    incubif = [i+'.fits' for i in incubi]
+    pincubi = ['test2_pincubus1', 'test2_pincubus2']
+    pincubif = [i+'.fits' for i in pincubi]
+    
+    # 
+    Beach(verb = False).gentestcubes(outcubi_prefix = incubi, amp0 = 1., ainc = 0.0, pinc = 5., bmaj0 = 10., bmin0 = 7., binc = 0., bpa0 = 0, cinc = 0, mode = 'gauss', ctype3='VRAD', channelwidth = 5000)
+    
+    print('Created input cubes {:s} and {:s}, with properties:'.format(incubi[0], incubi[1]))
+    printcubeinfo(incubif[0])
+    printcubeinfo(incubif[1])
+    
+    Beach(verb = False).gentestcubes(outcubi_prefix = pincubi, amp0 = 1., ainc = 0.0, pinc = -5., mode = 'point', ctype3='VRAD', channelwidth = 5000)
+
+    beach = Beach(inc_cubes = incubif, gentrans_exe = False)
+
+    outcubif = ['test2_outcubus1.fits', 'test2_outcubus2.fits']
+
+    # This is just a preliminary exercise to create a parameter input interface
+    beach = Beach(inc_cubes = incubif, gentrans_exe = False)
+#    printbeachconts(beach)
+    beach.gentrans(tra_fitsnames = outcubif, tra_modelnames = pincubif, tra_overwrite = True)
+    print()
+    print('Test 2: Created output cubes {:s} and {:s}'.format(outcubif[0], outcubif[1]))
+    print()
+
+    print()
+    print('########################')
+
+def test3():
+    print('########################')
+    print('########################')
+    print('Test 3: Short version (shorter is still possible)')
+    print('########################')
+    print()
+
+    incubi =  ['test3_incubus1',  'test3_incubus2']
+    incubif = [i+'.fits' for i in incubi]
+    pincubi = ['test3_pincubus1', 'test3_pincubus2']
+    pincubif = [i+'.fits' for i in pincubi]
+    
+    Beach(verb = False).gentestcubes(outcubi_prefix = incubi, amp0 = 1., ainc = 0.0, pinc = 5., bmaj0 = 10., bmin0 = 7., binc = 0., bpa0 = 0, cinc = 0, mode = 'gauss', ctype3='VRAD', channelwidth = 5000)
+    Beach(verb = False).gentestcubes(outcubi_prefix = pincubi, amp0 = 1., ainc = 0.0, pinc = -5., mode = 'point', ctype3='VRAD', channelwidth = 5000)
+
+    # This is all it takes
+    outcubif = ['test3_outcubus1.fits', 'test3_outcubus2.fits']
+    Beach(inc_cubes = incubif, tra_modelnames = pincubif, tra_fitsnames = outcubif, tra_overwrite = True)
+    print()
+    print('Test 3: Created output cubes {:s} and {:s}'.format(outcubif[0], outcubif[1]))
+    print()
+
+def test4():
+
+    print('################################')
+    print('################################')
+    print(' Test 4: Just images, not cubes')
+    print('################################')
+    print()
+    
+    incubi =  ['test4_incubus1',  'test4_incubus2']
+    incubif = [i+'.fits' for i in incubi]
+    pincubi = ['test4_pincubus1', 'test4_pincubus2']
+    pincubif = [i+'.fits' for i in pincubi]
+    
+    Beach(verb = False).gentestcubes(outcubi_prefix = incubi, naxis = 2, naxis3 = 1, amp0 = 1., ainc = 0.0, pinc = 5., bmaj0 = 10., bmin0 = 7., binc = 0., bpa0 = 0, cinc = 0, mode = 'gauss', ctype3='VRAD', channelwidth = 5000)
+    
+    Beach(verb = False).gentestcubes(outcubi_prefix = pincubi, naxis = 2, naxis3 = 1, amp0 = 1., ainc = 0.0, pinc = -5., mode = 'point', ctype3='VRAD', channelwidth = 5000)
+
+    print('Created input cubes {:s} and {:s}'.format(incubif[0], incubif[1]))
+    #    printcubeinfo(incubi[0])
+    #    printcubeinfo(incubi[1])
+    outcubif = ['test4_outcubus1.fits', 'test4_outcubus2.fits']
+
+    beach = Beach(inc_cubes = incubif, tra_modelnames = pincubif, tra_fitsnames = outcubif, gentrans_exe = False)
+    printbeachconts(beach)
+    print()
+    print('Test 4: Created output cubes {:s} and {:s}'.format(outcubif[0], outcubif[1]))
+    print()
+
+def test5():
+    print('########################')
+    print('########################')
+    print(' Test 5: Statistics plots')
+    print('########################')
+    print()
+    incubi = []
+    pincubi = []
+    incubif = []
+    pincubif = []
+    outcubif = []
+    for i in range(10):
+        incubi.append('test5_incubus_{:d}'.format(i))
+        pincubi.append('test5_pincubus_{:d}'.format(i))
+        incubif.append('test5_incubus_{:d}.fits'.format(i))
+        pincubif.append('test5_pincubus_{:d}.fits'.format(i))
+        outcubif.append('test5_outcubus_{:d}.fits'.format(i))
+
+    Beach(verb = False).gentestcubes(outcubi_prefix = incubi, naxis = 2, naxis3 = 20, amp0 = 1., ainc = 0.01, pinc = 0.5, bmaj0 = 10., bmin0 = 7., binc = 0.1, bpa0 = 0, cinc = 0.3, mode = 'gauss', ctype3='VRAD', channelwidth = 5000)
+    
+    Beach(verb = False).gentestcubes(outcubi_prefix = pincubi, naxis = 2, naxis3 = 20, amp0 = 1., ainc = 0.01, pinc = -0.5, bmaj0 = 10., cinc = 0.3, mode = 'point', ctype3='VRAD', channelwidth = 5000)
+    
+    beach = Beach(inc_cubes = incubif, gentrans_exe = False, bst_percents = 95)
+    printbeachconts(beach)
+    beach.genhistoplots(hist_plotname='test5.png', hist_interactive='test5.html', hist_scaling = 'constant', hist_sample = 'chan', hist_n_per_bin = 2, hist_overwrite = True)
+    #beach.gentrans(tra_fitsnames = outcubif, tra_modelnames = pincubif, tra_overwrite = True)
+    print()
+    print('Test 5: Created output plots')
+    print()
+    
+def test6():
+    print('########################')
+    print('########################')
+    print(' Test 6: Masking')
+    print('########################')
+    print()
+    incubi = []
+    pincubi = []
+    incubif = []
+    pincubif = []
+    outcubif_mask = []
+    outcubif_scale = []
+    outcubif_hybrid = []
+    outcubif_max = []
+    for i in range(1):
+        incubi.append('test6_incubus_{:d}'.format(i))
+        pincubi.append('test6_pincubus_{:d}'.format(i))
+        incubif.append('test6_incubus_{:d}.fits'.format(i))
+        pincubif.append('test6_pincubus_{:d}.fits'.format(i))
+        outcubif_scale.append('test6_outcubus_scale_{:d}.fits'.format(i))
+        outcubif_mask.append('test6_outcubus_mask_{:d}.fits'.format(i))
+        outcubif_hybrid.append('test6_outcubus_hybrid_{:d}.fits'.format(i))
+        outcubif_max.append('test6_outcubus_max_{:d}.fits'.format(i))
+
+    Beach(verb = False).gentestcubes(outcubi_prefix = incubi, naxis = 2, naxis3 = 20, amp0 = 1., ainc = 0.00, pinc = 0.5, bmaj0 = 10., bmin0 = 7., binc = 0.5, bpa0 = 0, cinc = 0.3, mode = 'gauss', ctype3='VRAD', channelwidth = 5000)
+    
+    #Beach(verb = False).gentestcubes(outcubi_prefix = pincubi, naxis = 2, naxis3 = 20, amp0 = 1., ainc = 0.01, pinc = -0.5, bmaj0 = 10., cinc = 0.3, mode = 'point', ctype3='VRAD', channelwidth = 5000)
+    
+    beach = Beach(inc_cubes = incubif, gentrans_exe = False, bst_percents = 50)
+    printbeachconts(beach)
+    #beach.genhistoplots(hist_plotname='test6.png', hist_interactive='test6.html', hist_scaling = 'constant', hist_sample = 'total', hist_n_per_bin = 2, hist_overwrite = True)
+    #beach.gentrans(tra_fitsnames = outcubif, tra_modelnames = pincubif, tra_overwrite = True)
+    beach.gentrans(tra_fitsnames = outcubif_mask, tra_mode = 'mask', tra_tol = 0.001, tra_maxker = 1E7, tra_overwrite = True)
+    beach.gentrans(tra_fitsnames = outcubif_scale, tra_mode = 'scale', tra_tol = 0.001, tra_maxker = 1E7, tra_overwrite = True)
+    beach.gentrans(tra_fitsnames = outcubif_hybrid, tra_mode = 'hybrid', tra_tol = 0.001, tra_maxker = 1E7, tra_overwrite = True)
+    beach.gentrans(tra_fitsnames = outcubif_max, tra_mode = 'max', tra_tol = 0.001, tra_maxker = 1E7, tra_overwrite = True)
+    print()
+    print('Test 6: Created output cubes')
+    print()
+    print('Reading output cubes and determining approximate total flux per channel')
+    gettoflux(incubif)
+    gettoflux(outcubif_mask)
+    gettoflux(outcubif_scale)
+    gettoflux(outcubif_hybrid)
+    gettoflux(outcubif_max)
+    
 def testing():
+    
     #Beach().convoltests()
 
     print('')
@@ -4630,199 +4972,13 @@ def testing():
     print('##################')
     print(' Final Tests/Demo ')
     print('##################')
-
-    # The following parameters will be re-used in many tests
-    naxis1 = 257
-    naxis2 = 513
-    naxis3 = 4
-
-    # The Gaussian properties increase by one per plane and the
-    # position angle by 5 per plane
-    amp0 = 1.
-    ainc = 0.0
-    pinc = 5.
-    bmaj0 = 10. 
-    bmin0 = 7.
-    binc = 0.
-    bpa0 = 0
-    cinc = 0
+    test1()
+    test2()
+    test3()
+    test4()
+    test5()
+    test6()
     
-    gauprops = []
-    poiprops = []
-    
-    # 2 cubes
-    for i in range(2):
-        planar = np.zeros((naxis3,6))
-        for j in range(naxis3):
-            planar[j, 0] = naxis1//2+(i*naxis3+j)*pinc
-            planar[j, 1] = naxis2//2+(i*naxis3+j)*pinc
-            planar[j, 2] = amp0+(i*naxis3+j)*ainc
-            planar[j, 3] = bmaj0+(i*naxis3+j)*binc
-            planar[j, 4] = bmin0+(i*naxis3+j)*binc
-            planar[j, 5] = bpa0+(i*naxis3+j)*cinc
-        gauprops.append(planar)
-        planir = planar.copy()
-        for j in range(naxis3):
-            planir[j, 0] = naxis1//2-((i+1)*naxis3+j)*pinc
-            planir[j, 1] = naxis2//2-((i+1)*naxis3+j)*pinc
-            planir[j, 2] = amp0+(i*naxis3+j)*ainc
-        poiprops.append(planir)
-        
-    print()
-    print('########################')
-    print('########################')
-    print(' Test 1: Frequency axis')
-    print('########################')
-    print()
-
-    incubi = ['test1_incubus1.fits', 'test1_incubus2.fits']
-    Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis1 = naxis1, naxis2 = naxis2, ctype3='FREQ')
-    print('Created input cubes {:s} and {:s}'.format(incubi[0], incubi[1]))
-    printcubeinfo(incubi[0])
-    printcubeinfo(incubi[1])
-    outcubi = ['test1_outcubus1.fits', 'test1_outcubus2.fits']
-
-    # This is just a preliminary exercise to create a parameter input interface
-    params = { 'cubes': incubi,
-               'tra_fitsnames': outcubi
-    }
-    beach = Beach(inc_cubes = params['cubes'], gentrans_exe = False)
-    printbeachconts(beach)
-    print()
-    print('########################')
-    
-    beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
-    print()
-    print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
-    print()
-    print('########################')
-    print('########################')
-    print(' Test 2: Velocity axis')
-    print('########################')
-    print()
-
-    incubi = ['test2_incubus1.fits', 'test2_incubus2.fits']
-    pincubi = ['test2_pincubus1.fits', 'test2_pincubus2.fits']
-    Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
-    print('Created input cubes {:s} and {:s}'.format(incubi[0], incubi[1]))
-    Beach(verb = False).createstcubes(gauprops = poiprops, mode = 'point', outcubi = pincubi, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
-    print('Created input cubes {:s} and {:s}'.format(pincubi[0], pincubi[1]))
-#    printcubeinfo(incubi[0])
-#    printcubeinfo(incubi[1])
-    outcubi = ['test2_outcubus1.fits', 'test2_outcubus2.fits']
-
-    # This is just a preliminary exercise to create a parameter input interface
-    params = { 'cubes': incubi,
-               'tra_fitsnames': outcubi,
-               'tra_modelnames': pincubi
-    }
-    print(params)
-#    beach = Beach(inc_cubes = params['cubes'], gentrans_exe = False)
-#    printbeachconts(beach)
-    beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_modelnames = params['tra_modelnames'], tra_overwrite = True)
-    print()
-    print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
-    print()
-    print('########################')
-    print('########################')
-    print('Test 3: Short version (shorter is still possible)')
-    print('########################')
-    print()
-
-    incubi =  ['test2_incubus1.fits', 'test2_incubus2.fits']
-    outcubi = ['test3_outcubus1.fits', 'test3_outcubus2.fits']
-    params = { 'cubes': incubi,
-               'tra_fitsnames': outcubi
-    }
-#    Beach(inc_cubes = params['cubes'], tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
-    print()
-    print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
-    print()
-    print('########################')
-    print('########################')
-    print(' Test 4: Just images')
-    print('########################')
-    print()
-    gauprops[0] = gauprops[0][0,:].reshape((1,6))
-    gauprops[1] = gauprops[1][0,:].reshape((1,6))
-    incubi = ['test4_incubus1.fits', 'test4_incubus2.fits']
-#    Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis = 2, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
-    print('Created input cubes {:s} and {:s}'.format(incubi[0], incubi[1]))
-#    printcubeinfo(incubi[0])
-#    printcubeinfo(incubi[1])
-    outcubi = ['test4_outcubus1.fits', 'test4_outcubus2.fits']
-
-    # This is just a preliminary exercise to create a parameter input interface
-    params = { 'cubes': incubi,
-               'tra_fitsnames': outcubi
-    }
-#    beach = Beach(inc_cubes = params['cubes'], gentrans_exe = False)
-#    printbeachconts(beach)
-#    beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
-    print()
-    print('Created output cubes {:s} and {:s}'.format(outcubi[0], outcubi[1]))
-    print()
-    
-    print('########################')
-    print('########################')
-    print(' Test 5: Statistics plots')
-    print('########################')
-    print()
-
-    # Now we need more cubes and more planes
-    
-    # 20 planes
-    naxis3 = 20
-    
-    amp0 = 1. # Amplitude
-    ainc = 0.01 # Increase in amplitude
-    pinc = 0.5 # Increase in position
-    bmaj0 = 10. # Major axis
-    bmin0 = 7. # Minor axis
-    binc = 0.1 # Axis increase
-    bpa0 = 0 # Position angle
-    cinc = 0.3 # Position angle increase
-    
-    gauprops = []
-    poiprops = []
-    
-    # 10 cubes
-    incubi = []
-    pincubi = []
-    outcubi = []
-    for i in range(10):
-        planar = np.zeros((naxis3,6))
-        for j in range(naxis3):
-            planar[j, 0] = naxis1//2+(i*naxis3+j)*pinc
-            planar[j, 1] = naxis2//2+(i*naxis3+j)*pinc
-            planar[j, 2] = amp0+(i*naxis3+j)*ainc
-            planar[j, 3] = bmaj0+(i*naxis3+j)*binc*(1+(i*naxis3+j)/10.)
-            planar[j, 4] = (bmin0+(i*naxis3+j)*binc*(1+(i*naxis3+j)/8.))/2
-            planar[j, 5] = bpa0+(i*naxis3+j)*cinc*(1+(i*naxis3+j)/6.)
-        gauprops.append(planar)
-        for j in range(naxis3):
-            planar[j, 0] = naxis1//2-((i+1)*naxis3+j)*pinc
-            planar[j, 1] = naxis2//2-((i+1)*naxis3+j)*pinc
-            planar[j, 2] = amp0+(i*naxis3+j)*ainc
-        poiprops.append(planar)
-        
-        incubi.append('test5_incubus_{:d}.fits'.format(i))
-        pincubi.append('test5_pincubus_{:d}.fits'.format(i))
-        outcubi.append('test5_outcubus_{:d}.fits'.format(i))
-        
-#    Beach(verb = False).createstcubes(gauprops = gauprops, outcubi = incubi, naxis = 4, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
-#    Beach(verb = False).createstcubes(gauprops = poiprops, mode = 'point', outcubi = pincubi, naxis = 4, naxis1 = naxis1, naxis2 = naxis2, ctype3='VRAD')
-    params = { 'cubes': incubi,
-               'tra_fitsnames': outcubi
-    }
-#    beach = Beach(inc_cubes = params['cubes'], gentrans_exe = False)
-#    printbeachconts(beach)
-#    beach.genhistoplots(hist_plotname='test5.png', hist_interactive='test5.html', hist_scaling = 'constant', hist_sample = 'chan', hist_n_per_bin = 2, hist_overwrite = True)
-    #beach.gentrans(tra_fitsnames = params['tra_fitsnames'], tra_overwrite = True)
-    print()
-    print('Created output plots')
-    print()
-
 def description():
     """
     Describing the class's properties
@@ -4984,7 +5140,7 @@ textwrap.fill('--tar_bpa_absc   0.0', initial_indent=4*' ', subsequent_indent=21
 textwrap.fill('Generate a set of transformed images from the input with the beam properties derived (gen\'tra\'ns)')+'\n'+\
 textwrap.fill(70*'=')+'\n'+\
 '\n'+\
-textwrap.fill('The final section serially opens all cubes (images) listed in inc_cubes and generates cubes (de-)convolved to the resolution as specified in the target section. The section can be omitted by setting --gentrans_exe False. If executed the section optionally convolves all cubes listed in --tra_modelnames TRA_MODELNAMES with the respective Gaussians and adds those to the output. If given, the number of cubes listed as TRA_MODELNAMES and the dimensionality of the cubes must be identical to the one of the input cubes (specified through INC_CUBES). While from a mathematical viewpoint the de-convolution to smaller beams should work, this is in practice limited by numerical effects. To handle such situations, equolver provides several strategies, specified with the parameter --tra_mode TRA_MODE. A (de-)convolution is declared a success or a failure by comparing for the input and output plane the sum of the inner quarter of the plane divided by the beam solid angle. If the ratio of the larger sum divided by the smaller sum is larger than the parameter --tra_tol TRA_TOL (default: 2), the total power hence changes significally, the (de-)convolution is flagged a failure.')+'\n'+\
+textwrap.fill('The final section serially opens all cubes (images) listed in inc_cubes and generates cubes (de-)convolved to the resolution as specified in the target section. The section can be omitted by setting --gentrans_exe False. If executed the section optionally convolves all cubes listed in --tra_modelnames TRA_MODELNAMES with the respective Gaussians and adds those to the output. If given, the number of cubes listed as TRA_MODELNAMES and the dimensionality of the cubes must be identical to the one of the input cubes (specified through INC_CUBES). While from a mathematical viewpoint the de-convolution to smaller beams should work, this is in practice limited by numerical effects. To handle such situations, equolver provides several strategies, specified with the parameter --tra_mode TRA_MODE. A (de-)convolution is declared a success or a failure by comparing for the input and output plane the sum of the pixels of the plane divided by the beam solid angle. If the ratio of the larger sum divided by the smaller sum is larger than the parameter --tra_tol TRA_TOL (default: 2), the total power hence changes significally, the (de-)convolution is flagged a failure. In addition, --tra_maxker TRA_MAXKER allows the user to manually set the maximum in the FT of a kernel as an alternative way to decide whether a reconvolution is bound to fail.')+'\n'+\
 '\n'+\
 'The mode of the deconvolution is determined with TRA_MODE as follows:'+'\n'+\
 '\n'+\
@@ -5058,6 +5214,7 @@ def parsing():
     parser.add_argument('--tra_fitsnames', '-o', help='Output fits file names.')
     parser.add_argument('--tra_mode',       help='\'scale\', \'mask\', \'hybrid\', \'max\'')
     parser.add_argument('--tra_tol',        help='tolerance to determine if convolution failed')
+    parser.add_argument('--tra_maxker',     help='Maximum value that the FT of the convolution kernel can assume, will assume failure if larger')
     parser.add_argument('--tra_commonbeam', help='Generate common (average) beam information in header')
     parser.add_argument('--tra_indibeam',   help='Generate individual beam information in header')
     parser.add_argument('--tra_hdmode',     help='Generate information about scaling/convolution in header')
@@ -5065,7 +5222,6 @@ def parsing():
 
     whatnot = parser.parse_args()
     inpars = vars(whatnot)
-    print(inpars)
 
     for key in inpars.keys():
         try:
@@ -5074,10 +5230,11 @@ def parsing():
             result = inpars[key]
         inpars[key] = result
 
-    if 'inc_cubes' in inpars.keys():
-        print(inpars['inc_cubes'])
-        if inpars['inc_cubes'] == True:
-            print('yo')
+    # if 'inc_cubes' in inpars.keys():
+    #     print(inpars['inc_cubes'])
+    #     if inpars['inc_cubes'] == True:
+    #         print('yo')
+    
     return inpars
     
 def runtime():
