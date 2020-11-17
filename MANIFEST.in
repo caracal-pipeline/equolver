@@ -1,2 +1,2 @@
-#include equolver/bin/equolver
+include equolver/bin/equolver
 recursive-include equolver/ *.py
