@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import numpy as np
-
 from equolver import beach
+
 print('')
 print('##############')
 print(' Beach Demo ')
