@@ -17,7 +17,7 @@ requirements = [
 ]
 
 PACKAGE_NAME = 'equolver'
-__version__ = '0.0.2'
+__version__ = '0.0.4'
 
 setup(name=PACKAGE_NAME,
       version=__version__,
