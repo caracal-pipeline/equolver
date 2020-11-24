@@ -9,6 +9,10 @@ import pytest
 # Under construction
 
 
+@pytest.fixture
+def cube():
+    return np.ones((100, 100, 128))
+
 @pytest.fixture(params=[16, 32])
 def freq(request):
     return np.linspace(.856e9, 2*.856e9, request.param)
@@ -20,8 +24,8 @@ def freq(request):
 ])
 @pytest.mark.parametrize("freq", [8, 64], indirect=True)
 #@pytest.mark.parametrize("freq", [np.linspace(.856e9, 2*.856e9, 16)])
-def test_example(freq, corrs):
-    print(corrs, freq.size)
+def test_example(freq, corrs, cube):
+    print(corrs, freq.size, cube.sum())
 
 
 @pytest.mark.parametrize("point_source", ["point_source.fits"])
