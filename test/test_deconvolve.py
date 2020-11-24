@@ -9,6 +9,21 @@ import pytest
 # Under construction
 
 
+@pytest.fixture(params=[16, 32])
+def freq(request):
+    return np.linspace(.856e9, 2*.856e9, request.param)
+
+
+@pytest.mark.parametrize("corrs", [
+    ("XX", "XY", "YX", "YY"),
+    ("RR", "RL", "LR", "LL"),
+])
+@pytest.mark.parametrize("freq", [8, 64], indirect=True)
+#@pytest.mark.parametrize("freq", [np.linspace(.856e9, 2*.856e9, 16)])
+def test_example(freq, corrs):
+    print(corrs, freq.size)
+
+
 @pytest.mark.parametrize("point_source", ["point_source.fits"])
 @pytest.mark.parametrize("gaussian_at_centre", ["gaussian_at_centre.fits"])
 @pytest.mark.parametrize("gaussian_at_origin", ["gaussian_at_origin.fits"])
