@@ -1,11 +1,41 @@
-import equolver
+from equolver.beach import Beach
 import astropy.io as astropy_io
+from astropy.io import fits
+import numpy as np
+from numpy.testing import assert_almost_equal
 import pyfftw
+import pytest
 
 # Under construction
 
-def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = 'gaussian_at_centre.fits', gaussian_at_origin = 'gaussian_at_origin.fits', real_fft_conv = 'real_fft_conv.fits', real_fft_conv_calc = 'real_fft_conv_calc.fits', reconvolve_input_image = 'reconvolve_input_image.fits', reconvolve_output_image = 'reconvolve_output_image.fits'):
 
+@pytest.fixture
+def cube():
+    return np.ones((100, 100, 128))
+
+@pytest.fixture(params=[16, 32])
+def freq(request):
+    return np.linspace(.856e9, 2*.856e9, request.param)
+
+
+@pytest.mark.parametrize("corrs", [
+    ("XX", "XY", "YX", "YY"),
+    ("RR", "RL", "LR", "LL"),
+])
+@pytest.mark.parametrize("freq", [8, 64], indirect=True)
+#@pytest.mark.parametrize("freq", [np.linspace(.856e9, 2*.856e9, 16)])
+def test_example(freq, corrs, cube):
+    print(corrs, freq.size, cube.sum())
+
+
+@pytest.mark.parametrize("point_source", ["point_source.fits"])
+@pytest.mark.parametrize("gaussian_at_centre", ["gaussian_at_centre.fits"])
+@pytest.mark.parametrize("gaussian_at_origin", ["gaussian_at_origin.fits"])
+@pytest.mark.parametrize("real_fft_conv", ["real_fft_conv.fits"])
+@pytest.mark.parametrize("real_fft_conv_calc", ["real_fft_conv_calc.fits"])
+@pytest.mark.parametrize("reconvolve_input_image", ["reconvolve_input_image.fits"])
+@pytest.mark.parametrize("reconvolve_output_image", ["reconvolve_output_image.fits"])
+def test_convoltests(point_source, gaussian_at_centre, gaussian_at_origin, real_fft_conv, real_fft_conv_calc, reconvolve_input_image, reconvolve_output_image):
     threads = 1
 
     print()
@@ -56,7 +86,10 @@ def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = '
     dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
     pa_a = np.pi*30./180.
 
-    hdu[0].data[:] = self._gaussian_2dp( naxis1 =
+    beach = Beach()
+
+
+    hdu[0].data[:] = beach._gaussian_2dp( naxis1 =
                                          target.shape[1], naxis2 =
                                          target.shape[0], cdelt1 =
                                          1., cdelt2 = 1.,
@@ -114,7 +147,7 @@ def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = '
     dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
     pa_a = np.pi*30./180.
 
-    hdu[0].data[:] = self._gaussian_2dp( naxis1 =
+    hdu[0].data[:] = beach._gaussian_2dp( naxis1 =
                                          target.shape[1], naxis2 =
                                          target.shape[0], cdelt1 =
                                          1., cdelt2 = 1.,
@@ -174,7 +207,7 @@ def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = '
     dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
     pa_a = np.pi*30./180.
 
-    kernel = self._gaussian_2dp(naxis1 = target.shape[1], naxis2 =
+    kernel = beach._gaussian_2dp(naxis1 = target.shape[1], naxis2 =
                                 target.shape[0], cdelt1 =
                                 1., cdelt2 = 1.,
                                 amplitude_maj_a =
@@ -244,7 +277,7 @@ def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = '
     dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
     pa_a = np.pi*30./180.
 
-    ikernel = self._igaussian_2dp(naxis1 = target.shape[1], naxis2
+    ikernel = beach._igaussian_2dp(naxis1 = target.shape[1], naxis2
                                   = target.shape[0], cdelt1 = 1.,
                                   cdelt2 = 1., amplitude_maj_a = amp_maj_a,
                                   dispersion_maj_a = dis_maj_a,
@@ -305,7 +338,7 @@ def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = '
     dis_min_a = HPBW_min_a/np.sqrt(np.log(256.))
     pa_a = np.pi*30./180.
 
-    hdu[0].data[:] = self._gaussian_2dp( naxis1 =
+    hdu[0].data[:] = beach._gaussian_2dp( naxis1 =
                                          target.shape[1], naxis2 =
                                          target.shape[0], cdelt1 =
                                          1., cdelt2 = 1.,
@@ -323,7 +356,14 @@ def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = '
                                          centering = 'bla',
                                          forreal = False).astype(hdu[0].data.dtype)
 
-    print('Original result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
+
+    orig_centre = hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2]
+    orig_minor_half_power = hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)]
+    orig_major_half_power = hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)]
+
+    print('Original result at centre', orig_centre)
+    print('Original result at half power', orig_minor_half_power)
+    print('Original result at half power', orig_major_half_power)
 
     xmin = np.cos(pa_a)*HPBW_min_a/2
     ymin = np.sin(pa_a)*HPBW_min_a/2
@@ -409,7 +449,7 @@ def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = '
     #acorrmaj = np.power(np.sqrt(2*np.pi*disn_maj_a*disn_maj_a*minikern*minikern/(disn_maj_a*disn_maj_a+minikern*minikern)), -1)
     #acorrmin = np.power(np.sqrt(2*np.pi*disn_min_a*disn_min_a*minikern*minikern/(disn_min_a*disn_min_a+minikern*minikern)), sign_min_a)
 
-    #ikernel = self._igaussian_2dp(naxis1 = target.shape[1], naxis2
+    #ikernel = beach._igaussian_2dp(naxis1 = target.shape[1], naxis2
     #                             = target.shape[0], cdelt1 = 1.,
     #                             cdelt2 = 1., amplitude_maj_a =
     #                             1., dispersion_maj_a =
@@ -427,7 +467,7 @@ def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = '
     #                             centering = 'origin', forreal =
     #                             True)
     #
-    ikernel = self._igaussian_2dp(naxis1 = target.shape[1], naxis2
+    ikernel = beach._igaussian_2dp(naxis1 = target.shape[1], naxis2
                                   = target.shape[0], cdelt1 = 1.,
                                   cdelt2 = 1., amplitude_maj_a =
                                   amp_maj_a, dispersion_maj_a =
@@ -460,9 +500,17 @@ def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = '
     xmaj = -np.sin(pa_b)*HPBW_maj_b/2
     ymaj = np.cos(pa_b)*HPBW_maj_b/2
 
-    print('Final result at centre', hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2])
-    print('Final result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)])
-    print('Final result at half power', hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)])
+    final_centre = hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2]
+    final_minor_half_power = hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)]
+    final_major_half_power = hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)]
+
+    assert_almost_equal(orig_centre, final_centre)
+    assert_almost_equal(orig_minor_half_power, final_minor_half_power)
+    assert_almost_equal(orig_major_half_power, final_major_half_power)
+
+    print('Final result at centre', final_centre)
+    print('Final result at half power', final_minor_half_power)
+    print('Final result at half power', final_major_half_power)
     hdu[0].data[hdu[0].data.shape[0]//2, hdu[0].data.shape[1]//2] += 2
     hdu[0].data[hdu[0].data.shape[0]//2+int(ymin),hdu[0].data.shape[1]//2+int(xmin)] += 2.
     hdu[0].data[hdu[0].data.shape[0]//2+int(ymaj),hdu[0].data.shape[1]//2+int(xmaj)] += 2.
@@ -470,7 +518,6 @@ def convoltests(self, point_source = 'point_source.fits', gaussian_at_centre = '
     print('Image to be found at', reconvolve_output_image)
     hdu.close()
     print('')
-    return
 
 if __name__ == '__main__':
     convoltests()
