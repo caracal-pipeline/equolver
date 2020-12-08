@@ -17,7 +17,7 @@ import argparse
 import sys
 import textwrap
 
-version = '0.0.7a'
+version = '0.0.7'
 
 
 class Beach:
