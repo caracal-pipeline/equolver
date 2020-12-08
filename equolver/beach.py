@@ -56,7 +56,8 @@ class Beach:
                  tar_bpa_slope=0.0, tar_bpa_absc=0.0,
                  tar_scaling='frequency', genbstats_exe=True,
                  gentarget_exe=True,
-                 gentrans_exe=True, tra_modelnames=None, tra_fitsnames=None,
+                 gentrans_exe=True, tra_residualnames=None,
+                 tra_modelnames=None, tra_fitsnames=None,
                  tra_mode='mask', tra_hdmode=True, tra_tol=0.0001,
                  tra_overwrite=False, tra_maxker=1E7,
                  tra_commonbeam=True, tra_indibeam=True,
@@ -148,6 +149,8 @@ class Beach:
 
         if genbstats_exe:
             self._genbstats_exe = True
+        else:
+            self._genbstats_exe = False
 
         self.genbinfo(verb=self._verb)
         self._bin_normfreq = copy.deepcopy(bin_normfreq)
@@ -177,7 +180,7 @@ class Beach:
         if self._gentarget_exe:
             self.gentarget(verb=self._verb)
 
-        for para in ['gentrans_exe', 'tra_modelnames',
+        for para in ['gentrans_exe', 'tra_modelnames', 'tra_residualnames',
                      'tra_fitsnames', 'tra_mode', 'tra_hdmode', 'tra_tol',
                      'tra_maxker', 'tra_overwrite', 'tra_commonbeam',
                      'tra_indibeam', 'tra_return_astropy']:
@@ -253,6 +256,7 @@ class Beach:
         self._binfo_target = None
 
         self._tra_modelnames = None
+        self._tra_residualnames = None
         self._tra_fitsnames = None
         self._tra_mode = None
         self._tra_hdmode = None
@@ -1175,6 +1179,28 @@ class Beach:
         return
 
     @property
+    def tra_residualnames(self):
+        """
+        Return a copy of _tra_residualnames
+        """
+        return self._tra_residualnames
+
+    @tra_residualnames.setter
+    def tra_residualnames(self, value):
+        """
+        Set tra_residualnames
+        """
+        self._tra_residualnames = copy.deepcopy(value)
+        if self._gentrans_exe:
+            self.gentrans(verb=False)
+        return
+
+    @tra_residualnames.deleter
+    def tra_residualnames(self):
+        self._tra_residualnames = None
+        return
+
+    @property
     def tra_mode(self):
         """
         Return a copy of _tra_mode
@@ -1281,7 +1307,7 @@ class Beach:
 
     @tra_overwrite.deleter
     def tra_overwrite(self):
-        self._tra_overwrite = None
+        self._tra_overwrite = False
         return
 
     @property
@@ -3345,7 +3371,8 @@ class Beach:
 
         return
 
-    def _initgentransvar(self, tra_modelnames=None, tra_fitsnames=None,
+    def _initgentransvar(self, tra_modelnames=None, tra_residualnames=None,
+                         tra_fitsnames=None,
                          tra_mode=None, tra_hdmode=None,
                          tra_tol=None, tra_maxker=None,
                          tra_commonbeam=None, tra_indibeam=None,
@@ -3362,6 +3389,7 @@ class Beach:
             if not isinstance(paras[param], type(None)):
                 self.__dict__['_'+param] = copy.deepcopy(paras[param])
         paras.pop('tra_modelnames')
+        paras.pop('tra_residualnames')
         for param in paras.keys():
             if self.__dict__['_'+param] is None:
                 if verb or self._verb:
@@ -3369,7 +3397,8 @@ class Beach:
                 output = True
         return output
 
-    def gentrans(self, tra_modelnames=None, tra_fitsnames=None,
+    def gentrans(self, tra_modelnames=None, tra_residualnames=None,
+                 tra_fitsnames=None,
                  tra_mode=None, tra_hdmode=None, tra_tol=None,
                  tra_commonbeam=None, tra_indibeam=None,
                  tra_indimode=None, tra_overwrite=None,
@@ -3383,6 +3412,13 @@ class Beach:
                                              alternatively astropy
                                              hdulists can be given.
                                              None is a valid input.
+        tra_residualnames (str or list of str): Input fits file names,
+                                             containing the residuals,
+                                             alternatively astropy
+                                             hdulists can be given.
+                                             If None is given, inc_cubes
+                                             is used, an empty list is
+                                             a valid input.
         tra_fitsnames (str or list of str) : Output fits file names
                                              None is a valid input.
         tra_mode (str)                     : 'scale', 'mask',
@@ -3407,7 +3443,7 @@ class Beach:
                                              will assume failure if larger
         threads (bool)                     : Number of threads
 
-        Serially opens all cubes (images) listed in inputnames and
+        Serially opens all cubes (images) listed in tra_residualnames and
         generates cubes (De-)convolved to the resolution as listed in
         the target structure. It then convolves all cubes listed in
         tra_modelnames with the respective Gaussians and adds those to
@@ -3449,6 +3485,7 @@ class Beach:
 
         """
         stop = self._initgentransvar(tra_modelnames=tra_modelnames,
+                                     tra_residualnames=tra_residualnames,
                                      tra_fitsnames=tra_fitsnames,
                                      tra_mode=tra_mode, tra_tol=tra_tol,
                                      tra_overwrite=tra_overwrite,
@@ -3462,6 +3499,9 @@ class Beach:
                 warnings.warn('Parameters missing. Not generating output ' +
                               'data sets.')
             return
+
+        if isinstance(self._tra_residualnames, type(None)):
+            self._tra_residualnames = copy.deepcopy(self._inc_cubes)
 
         if isinstance(self._binfo_target, type(None)):
             if verb or self._verb:
@@ -3483,30 +3523,43 @@ class Beach:
         else:
             transn = self._tra_fitsnames
 
-        if isinstance(self._inc_cubes, type('')):
-            cuben = [self._inc_cubes]
+        if isinstance(self._tra_residualnames, type('')):
+            cuben = [self._tra_residualnames]
         else:
-            cuben = self._inc_cubes
+            cuben = self._tra_residualnames
 
-        if isinstance(self._tra_modelnames, type([])):
-            modeln = self._tra_modelnames
-        else:
+        if isinstance(self._tra_modelnames, type('')):
             modeln = [self._tra_modelnames]
+        else:
+            modeln = self._tra_modelnames
 
-        if len(transn) != len(cuben):
-            if verb or self._verb:
-                warnings.warn('Number of input names not matching number of' +
-                              'output data sets. Not generating output data.')
-            return
+        if isinstance(modeln, type(None)):
+            modeln = []
+            
+        if isinstance(cuben, type(None)):
+            cuben = []
 
-        if not isinstance(modeln, type(None)):
-            if len(modeln) != len(cuben):
+        if len(modeln) > 0:
+            if len(modeln) != len(transn):
                 if verb or self._verb:
-                    warnings.warn('Number of input names not matching number' +
-                                  'of output data sets. Not generating ' +
-                                  'output data.')
+                    warnings.warn('Number of input model names not matching ' +
+                                  'number of output data sets. Not ' +
+                                  'generating output data.')
                 return
 
+        if len(cuben) > 0:
+            if len(cuben) != len(transn):
+                if verb or self._verb:
+                    warnings.warn('Number of input residual names not ' +
+                                  'matching number of output data sets. ' +
+                                  'Not generating output data.')
+                return
+
+
+        if len(cuben) == 0 and len(modeln) == 0:
+            warnings.warn('Neither residuals nor models are given ' +
+                          'Not generating output data.')
+        
         if self._tra_mode not in ['scale', 'mask', 'hybrid', 'max']:
             if verb or self._verb:
                 warnings.warn('Number of input names not matching number of' +
@@ -3522,190 +3575,191 @@ class Beach:
             tra_return_astropylist = []
 
         # Open, reconvolve, copy
-        for i in range(len(cuben)):
-            if isinstance(cuben[i], type('')):
-                incubus = fits.open(cuben[i])
-            else:
-                incubus = cuben[i]
-            incubus_image = incubus[0].data.astype(
-                'float'+'{:d}'.format(incubus[0].data.itemsize*8))
-            # orishape = incubus_image.shape
-
-            if incubus_image.ndim > 3:
-                incubus_image = np.squeeze(incubus_image)
-            if incubus_image.ndim == 2:
-                incubus_image = incubus_image.reshape(
-                    (1, incubus_image.shape[0], incubus_image.shape[1]))
-
-            # Make a copy
-            outcubus_image = incubus_image.copy()*0.+np.nan
-
-            planeinfo = {}
-
-            for plane in range(incubus_image.shape[0]):
-                print()
+        for i in range(len(transn)):
+            if len(cuben) > 0:
                 if isinstance(cuben[i], type('')):
-                    print('Processing {:s} plane {:d}'.format(cuben[i], plane))
+                    incubus = fits.open(cuben[i])
                 else:
-                    print('Processing cube {:d} plane {:d}'.format(i, plane))
-                originbeam = self._binfo_pixel[i][plane, :]
-                targetbeam = self._binfo_target[i][plane, :]
-                originplane = incubus_image[plane, :, :]
-                targetplane = outcubus_image[plane, :, :]
-                print('HPBW in pixels PA in deg, bmaj, bmin, bpa:' +
-                      ' {:.1f} {:.1f} {:.1f} -> {:.1f} {:.1f} {:.1f}'.format(originbeam[0]*np.sqrt(np.log(256.)),  # noqa: E501
-                                                                             originbeam[1]*np.sqrt(np.log(256.)),  # noqa: E501
-                                                                             180.*originbeam[2]/np.pi,  # noqa: E501
-                                                                             targetbeam[0]*np.sqrt(np.log(256.)),  # noqa: E501
-                                                                             targetbeam[1]*np.sqrt(np.log(256.)),  # noqa: E501
-                                                                             180.*targetbeam[2]/np.pi))  # noqa: E501
+                    incubus = cuben[i]
+                incubus_image = incubus[0].data.astype(
+                    'float'+'{:d}'.format(incubus[0].data.itemsize*8))
+                # orishape = incubus_image.shape
 
-                if self._tra_mode == 'scale':
+                if incubus_image.ndim > 3:
+                    incubus_image = np.squeeze(incubus_image)
+                if incubus_image.ndim == 2:
+                    incubus_image = incubus_image.reshape(
+                        (1, incubus_image.shape[0], incubus_image.shape[1]))
 
-                    # Scale by the area of the beam
-                    targetplane[:] = originplane*targetbeam[0] * \
-                        targetbeam[1]/(originbeam[0]*originbeam[1])
+                # Make a copy
+                outcubus_image = incubus_image.copy()*0.+np.nan
 
-                else:
+                planeinfo = {}
 
-                    # Attempt to convolve
-                    self._reconvolve(originplane, targetplane,
-                                     originbeam, targetbeam,
-                                     threads=self._threads,
-                                     maxker=self._tra_maxker)
-
-                    failure = False
-
-                    # Assess success: one nan/inf pixel marks failure
-                    if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
-                        failure = True
+                for plane in range(incubus_image.shape[0]):
+                    print()
+                    if isinstance(cuben[i], type('')):
+                        print('Processing {:s} plane {:d}'.format(cuben[i], plane))
                     else:
-                        # Asses success: the inner quarter of the image
-                        # should approximately show the same sum,
-                        # normalised by the beam size
-                        # originflux = originplane[originplane.shape[0]//4:3*originplane.shape[0]//4,   # noqa: E501
-                        #            originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])  # noqa: E501
-                        # targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,  # noqa: E501
-                        #            targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])  # noqa: E501
-                        originflux = originplane.sum(
-                        )/(originbeam[0]*originbeam[1])
-                        targetflux = targetplane.sum(
-                        )/(targetbeam[0]*targetbeam[1])
-                        failure = np.amax([np.fabs(originflux),
-                                           np.fabs(targetflux)])/np.amin([np.fabs(originflux),  # noqa: E501
-                                                                          np.fabs(targetflux)]) > self._tra_tol+1.  # noqa: E501
+                        print('Processing cube {:d} plane {:d}'.format(i, plane))
+                    originbeam = self._binfo_pixel[i][plane, :]
+                    targetbeam = self._binfo_target[i][plane, :]
+                    originplane = incubus_image[plane, :, :]
+                    targetplane = outcubus_image[plane, :, :]
+                    print('HPBW in pixels PA in deg, bmaj, bmin, bpa:' +
+                          ' {:.1f} {:.1f} {:.1f} -> {:.1f} {:.1f} {:.1f}'.format(originbeam[0]*np.sqrt(np.log(256.)),  # noqa: E501
+                                                                                 originbeam[1]*np.sqrt(np.log(256.)),  # noqa: E501
+                                                                                 180.*originbeam[2]/np.pi,  # noqa: E501
+                                                                                 targetbeam[0]*np.sqrt(np.log(256.)),  # noqa: E501
+                                                                                 targetbeam[1]*np.sqrt(np.log(256.)),  # noqa: E501
+                                                                                 180.*targetbeam[2]/np.pi))  # noqa: E501
 
-                    if failure:
-                        if isinstance(cuben[i], type('')):
-                            print(
-                                '{:s} plane {:d}: '.format(cuben[i],
-                                                           plane)) + \
-                                'failed to re-convolve'
+                    if self._tra_mode == 'scale':
+
+                        # Scale by the area of the beam
+                        targetplane[:] = originplane*targetbeam[0] * \
+                            targetbeam[1]/(originbeam[0]*originbeam[1])
+
+                    else:
+
+                        # Attempt to convolve
+                        self._reconvolve(originplane, targetplane,
+                                         originbeam, targetbeam,
+                                         threads=self._threads,
+                                         maxker=self._tra_maxker)
+
+                        failure = False
+
+                        # Assess success: one nan/inf pixel marks failure
+                        if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
+                            failure = True
                         else:
-                            print(
-                                'Cube {:d} plane {:d}: '.format(i, plane) +
-                                'failed to re-convolve')
+                            # Asses success: the inner quarter of the image
+                            # should approximately show the same sum,
+                            # normalised by the beam size
+                            # originflux = originplane[originplane.shape[0]//4:3*originplane.shape[0]//4,   # noqa: E501
+                            #            originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])  # noqa: E501
+                            # targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,  # noqa: E501
+                            #            targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])  # noqa: E501
+                            originflux = originplane.sum(
+                            )/(originbeam[0]*originbeam[1])
+                            targetflux = targetplane.sum(
+                            )/(targetbeam[0]*targetbeam[1])
+                            failure = np.amax([np.fabs(originflux),
+                                               np.fabs(targetflux)])/np.amin([np.fabs(originflux),  # noqa: E501
+                                                                              np.fabs(targetflux)]) > self._tra_tol+1.  # noqa: E501
 
-                        if self._tra_mode == 'mask':
-                            print('Masking')
-                            targetplane[:] = np.nan
-
-                        if self._tra_mode == 'hybrid':
-                            print('Scaling instead')
-                            targetplane[:] = originplane*targetbeam[0] * \
-                                targetbeam[1]/(originbeam[0]*originbeam[1])
-                            planeinfo['EQS_{:d}'.format(plane+1)] = 'SCALE'
-                            # targetplane[:] = np.nan
-
-                        if self._tra_mode == 'max':
-                            print('Max approach')
-
-                            # Target beam is smaller or oriented differentely
-                            #  than origin beam
-                            # Find out if bmin in targetbeam is larger than
-                            #  bmin in originbeam
-                            if targetbeam[1] > originbeam[1]:
-
-                                print('HPBW in pixels PA in deg, bmaj, bmin,' + \  # noqa
-                                      'bpa: {:.1f} {:.1f} {:.1f} -> {:.1f} {:.1f} {:.1f}'.format(originbeam[0]*np.sqrt(np.log(256.)),  # noqa: E501
-                                                                                                 originbeam[1]*np.sqrt(np.log(256.)),  # noqa: E501
-                                                                                                 180.*originbeam[2]/np.pi,  # noqa: E501
-                                                                                                 originbeam[0]*np.sqrt(np.log(256.)),  # noqa: E501
-                                                                                                 targetbeam[1]*np.sqrt(np.log(256.)),  # noqa: E501
-                                                                                                 180.*originbeam[2]/np.pi))  # noqa: E501
-
-                                # Then we can go half way, we convolve to the
-                                # same minor beam,
-                                # but not more
-                                self._reconvolve(originplane,
-                                                 targetplane,
-                                                 originbeam,
-                                                 [originbeam[0],
-                                                  targetbeam[1],
-                                                  originbeam[2]],
-                                                 maxker=self._tra_maxker,
-                                                 threads=self._threads)
-
-                                # Check again
-                                if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
-                                    print('This here')
-                                    failure_again = True
-                                else:
-                                    # Asses success: the inner quarter of the
-                                    # image should approximately show the same
-                                    # sum, normalised by the beam size
-                                    # orginflux = originplane[originplane.shape[0]//4:3* originplane.shape[0]//4,  # noqa: E501
-                                    #            originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])  # noqa: E501
-                                    # targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,  # noqa: E501
-                                    #            targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])  # noqa: E501
-                                    originflux = originplane.sum() / \
-                                        (originbeam[1])
-                                    targetflux = targetplane.sum() / \
-                                        (targetbeam[1])
-                                    failure_again = np.amax([np.fabs(originflux),  # noqa: E501
-                                                             np.fabs(targetflux)])/np.amin([np.fabs(originflux),  # noqa: E501
-                                                                                           np.fabs(targetflux)]) > self._tra_tol+1. \  # noqa: E501
-
-                                if failure_again:
-                                    if isinstance(cuben[i], type('')):
-                                        print(
-                                            '{:s} plane {:d}: '.format(cuben[i], plane) + \  # noqa: E501
-                                            'failed to re-convolve again')
-                                    else:
-                                        print(
-                                            'Cube {:d} plane {:d}: '.format(i, plane) + \  # noqa: E501
-                                            'failed to re-convolve again')
-                                    print('Rescaling only.')
-
-                                    # If we failed again (just a safeguard),
-                                    # we scale only
-                                    targetplane[:] = originplane * \
-                                        targetbeam[0] * \
-                                        targetbeam[1] / \
-                                        (originbeam[0]*originbeam[1])
-                                    planeinfo['EQS_{:d}'.format(
-                                        plane+1)] = 'SCALE'
-
-                                else:
-                                    print('Applying hybrid approach')
-                                    # If we succeeded we need to scale the rest
-                                    targetplane[:] = targetplane[:] * \
-                                        targetbeam[0]/originbeam[0]
-                                    planeinfo['EQS_{:d}'.format(
-                                        plane+1)] = 'HYBRID'
+                        if failure:
+                            if isinstance(cuben[i], type('')):
+                                print(
+                                    '{:s} plane {:d}: '.format(cuben[i],
+                                                               plane) + \
+                                    'failed to re-convolve')
                             else:
-                                print('Reconvolving not possible, ' +
-                                      'just scaling')
-                                # If we succeeded we need to scale the rest
-                                # targetplane[:] = targetplane*
-                                #   targetbeam[1]/originbeam[1]
+                                print(
+                                    'Cube {:d} plane {:d}: '.format(i, plane) +
+                                    'failed to re-convolve')
+
+                            if self._tra_mode == 'mask':
+                                print('Masking')
+                                targetplane[:] = np.nan
+
+                            if self._tra_mode == 'hybrid':
+                                print('Scaling instead')
                                 targetplane[:] = originplane*targetbeam[0] * \
                                     targetbeam[1]/(originbeam[0]*originbeam[1])
-                                planeinfo['EQS_{:d}'.format(
-                                    plane+1)] = 'HYBRID'
+                                planeinfo['EQS_{:d}'.format(plane+1)] = 'SCALE'
+                                # targetplane[:] = np.nan
 
-            if not isinstance(modeln[0], type(None)):
-                if isinstance(modeln[i], type('')):
+                            if self._tra_mode == 'max':
+                                print('Max approach')
+
+                                # Target beam is smaller or oriented differentely
+                                #  than origin beam
+                                # Find out if bmin in targetbeam is larger than
+                                #  bmin in originbeam
+                                if targetbeam[1] > originbeam[1]:
+
+                                    print('HPBW in pixels PA in deg, bmaj, bmin,' + \
+                                          'bpa: {:.1f} {:.1f} {:.1f} -> {:.1f} {:.1f} {:.1f}'.format(originbeam[0]*np.sqrt(np.log(256.)),  # noqa: E501
+                                                                                                     originbeam[1]*np.sqrt(np.log(256.)),  # noqa: E501
+                                                                                                     180.*originbeam[2]/np.pi,  # noqa: E501
+                                                                                                     originbeam[0]*np.sqrt(np.log(256.)),  # noqa: E501
+                                                                                                     targetbeam[1]*np.sqrt(np.log(256.)),  # noqa: E501
+                                                                                                     180.*originbeam[2]/np.pi))  # noqa: E501
+
+                                    # Then we can go half way, we convolve to the
+                                    # same minor beam,
+                                    # but not more
+                                    self._reconvolve(originplane,
+                                                     targetplane,
+                                                     originbeam,
+                                                     [originbeam[0],
+                                                      targetbeam[1],
+                                                      originbeam[2]],
+                                                     maxker=self._tra_maxker,
+                                                     threads=self._threads)
+
+                                    # Check again
+                                    if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
+                                        print('This here')
+                                        failure_again = True
+                                    else:
+                                        # Asses success: the inner quarter of the
+                                        # image should approximately show the same
+                                        # sum, normalised by the beam size
+                                        # orginflux = originplane[originplane.shape[0]//4:3* originplane.shape[0]//4,  # noqa: E501
+                                        #            originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])  # noqa: E501
+                                        # targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,  # noqa: E501
+                                        #            targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])  # noqa: E501
+                                        originflux = originplane.sum() / \
+                                            (originbeam[1])
+                                        targetflux = targetplane.sum() / \
+                                            (targetbeam[1])
+                                        failure_again = np.amax([np.fabs(originflux),  # noqa: E501
+                                                                 np.fabs(targetflux)])/np.amin([np.fabs(originflux),  # noqa: E501
+                                                                                               np.fabs(targetflux)]) > self._tra_tol+1. # noqa: E501
+
+                                    if failure_again:
+                                        if isinstance(cuben[i], type('')):
+                                            print(
+                                                '{:s} plane {:d}: '.format(cuben[i], plane) + \
+                                                'failed to re-convolve again')  # noqa: E501
+                                        else:
+                                            print(
+                                                'Cube {:d} plane {:d}: '.format(i, plane) + \
+                                                'failed to re-convolve again')  # noqa: E501
+                                        print('Rescaling only.')
+
+                                        # If we failed again (just a safeguard),
+                                        # we scale only
+                                        targetplane[:] = originplane * \
+                                            targetbeam[0] * \
+                                            targetbeam[1] / \
+                                            (originbeam[0]*originbeam[1])
+                                        planeinfo['EQS_{:d}'.format(
+                                            plane+1)] = 'SCALE'
+
+                                    else:
+                                        print('Applying hybrid approach')
+                                        # If we succeeded we need to scale the rest
+                                        targetplane[:] = targetplane[:] * \
+                                            targetbeam[0]/originbeam[0]
+                                        planeinfo['EQS_{:d}'.format(
+                                            plane+1)] = 'HYBRID'
+                                else:
+                                    print('Reconvolving not possible, ' +
+                                          'just scaling')
+                                    # If we succeeded we need to scale the rest
+                                    # targetplane[:] = targetplane*
+                                    #   targetbeam[1]/originbeam[1]
+                                    targetplane[:] = originplane*targetbeam[0] * \
+                                        targetbeam[1]/(originbeam[0]*originbeam[1])
+                                    planeinfo['EQS_{:d}'.format(
+                                        plane+1)] = 'HYBRID'
+
+            if len(modeln) > 0:
+                if isinstance(cuben[i], type('')):
                     inmodel = fits.open(modeln[i])
                 else:
                     inmodel = modeln[i]
@@ -3801,8 +3855,7 @@ class Beach:
             incubus[0].header['HISTORY'] = ''
 
             # Finally write and close cube
-            incubus.writeto(
-                self._tra_fitsnames[i], overwrite=self._tra_overwrite)
+            incubus.writeto(transn[i], overwrite=self._tra_overwrite)
 
             if self._tra_return_astropy:
                 tra_return_astropylist += [incubus]
@@ -5246,11 +5299,11 @@ def testing():
     print('##################')
     print(' Final Tests/Demo ')
     print('##################')
-    test1()
-    test2()
-    test3()
-    test4()
-    test5()
+    #test1()
+    #test2()
+    #test3()
+    #test4()
+    #test5()
     test6()
 
 
@@ -5258,176 +5311,176 @@ def description():
     """
     Describing the class's properties
     """
-    return '\n' + \  # noqa: E501
+    return '\n' + \
     textwrap.fill('This module is a radioastronomical tool. Its purpose is to transform a set of images with known resolution, which may vary from image to image, into a set of images with the same resolution (by choice relative to a frequency reference frame, see below):')+'\n' +\
-        '\n' + \  # noqa: E501
-    textwrap.fill('The resolution of a radioastronomical image is usually represented by a two-dimensional Gaussian, the (clean) beam, whose properties are known, and which is described by having an amplitude of 1 and a major- and minor axis of the ellipse at its half-power level (major axis \"half-power-beam-width\" (HPBW), or minor axis HPBW), as well as the position angle of the major axis (measuered anticlockwise from the North). The intensity (spectral brightness) in radioastronomical images is assumed to be the true sky brightness convolved with the individual Gaussians. In the following, parameters or quantities with suffixes, mediumfixes, or prefixes \'bmaj\' or \'BMAJ\' are related to the beam major axis HPBW, parameters or quantities with suffixes, mediumfixes, or prefixes \'bmin\' or \'BMIN\' are related to the beam major axis HPBW, parameters or quantities with suffixes, mediumfixes, or prefixes \'bpa\' or \'BPA\' are related to the beam majore axis position angle.')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('The module takes two sets of images or spectroscopic data cubes in FITS format as an input. One is assumed to contain (part of) the sky brightness convolved with a beam (a \"restored image\" or a \"resiudual\"), the other is assumed to be a sky model, which is not yet convolved with the beam. Equolver re-convolves each image/plane in the first data set to a common beam, or a set of common beams, which can be shared among all cubes, all planes, or within individual cubes. whose properties can be derived from the statistics of the known beams. To do so, the images are Fourier-transformed, then divided by the Fourier-transform of the original beam, multiplied with the Fourier-transform of the target beam, and Fourier-transformed back. Alternatively the images are scaled with the integral of the target beam (the target beam-solid-angle, BSA) divided by the BSA of the original beam. Hybrid approaches are also possible, see below. The images/planes in the second data set (the model) only get convolved with the target beam. Then both images are added.')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('In the following we provide a detailed description of the module and its input parameters. In some cases, the manual refers to lists as input parameters. Those are entered in Python style, as comma-separated lists of values enclosed by opening and closing brackets. Strings not entered inside a list can be entered without quotes, inside lists, strings should be enclosed by single- and double quotes. As many shell interpreters would interpret quotes themselves, the user has to take care for the right format. If the user wants e.g. to enter the list [\'foo\', \'fooly\'], on the command line in bash or csh this may have to be entered as e.g. --parameter \"[\'foo\', \'fooly\']\" (notice the double quotes).')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Equolver potentially goes through four steps, with the parameter prefixes indicating to which step they belong:')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('- Reading cubes (gen\'inc\'ubus)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('- Reading the beam information (gen\'bin\'fo)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('- Generating beam statistics (gen\'bst\'ats)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('- Generating (interactive) histograms for diagnostics (gen\'hist\'oplots)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('- Generating (a) common beam(s) from statistics or direct input (gen\'tar\'get)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('- Generate a set of transformed images from the input with the beam properties derived (gen\'tra\'ns)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    'Reading cubes (gen\'inc\'ubus):'+'\n' + \  # noqa: E501
-    textwrap.fill('============================')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('The user specifies the input cubes meant to be re-convolved with --inc_cubes INC_CUBES or -i INC_CUBES, where INC_CUBES is either a string with the ame of the single data cube (image) or a list of strings with the names of the cubes (images).')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Expansion scheme for parameters:')+'\n' + \  # noqa: E501
-    textwrap.fill('===============================')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Some parameters can take multiple formats, referring to the input list of cubes/images: The user can enter single values for all planes in all cubes/mages. The user can instead enter lists, where each value of the list corresponds to all planes in a data cube with the same index. If the user enters a list of ists, each member of the list (which is also a list) corresponds to a data cube/image with the same index, and its elements correspond to the planes in the orresponding data cube. Values can be entered in astropy syntax as strings of as floats, where the units are degrees or Hz.')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Example:')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('cube1.fits and cube2.fits each contain 3 planes (with indices from 0 to 2), and the user specifies -i \"[\'cube1\', \'cube2\']\".')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('- The user specifies --bin_bmaj 0.002 -> for all planes in both cubes the input bmaj is 0.002 degrees', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('- The user specifies --bin_bmaj \"[0.002, \'1 arcmin\']\" -> for all planes in cube1.fits the input bmaj is 0.002 degrees, for all planes in cube2.fits the input bmaj is 1 arcminute.', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('- The user specifies --bin_bmaj \"[[0.01, 0.02, 0.03], [0.04, 0.05, 0.06]]\" -> input bmaj is 0.01 deg for cube1.fits plane 0, 0.02 deg for cube1.fits plane 1, 0.03 deg for cube1.fits plane 2, 0.04 deg for cube2.fits plane 0, 0.05 deg for cube2.fits plane 1, 0.06 deg for cube2.fits plane 2.', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Reading the beam information (gen\'bin\'fo):')+'\n' + \  # noqa: E501
-    textwrap.fill('=========================================')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('If present, the beam properties of the individual images (planes) are read from the FITS headers of INC_CUBES (see \'Reading cubes\'), in which they ave a format BMAJ_NNN, BMIN_NNN, BPA_NNN, where NNN is the plane number, starting with 1. If the keywords BMAJ, BMIN, BPA (without suffix) are present in the eader, they serve as a default value for the respective plane-specific specifications. Alternatively, the user can directly provide the default values using -bin_bmaj BIN_BMAJ, --bin_bmin BIN_BMIN, and --bin_bpa BIN_BPA, following the expansion scheme for parameters: using this direct input, the user can provide one umber for all channels and cubes/images, a list of numbers, providing one number per cube, and a list of lists, providing a list of numbers (per channel) for each ube. If --bin_bmaj_replace True is set, the header values BMAJ or BMAJ_NNN in the data cubes are ignored and the input (\"default\") values are read in instead. f --bin_bmin_replace True is set, the header values BMIN or BMIN_NNN in the data cubes are ignored and the input (\"default\") values are read in instead. If -bin_bpa_replace True is set, the header values BPA or BPA_NNN in the data cubes are ignored and the input (\"default\") values are read in instead.')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('By nature, the third axis of a radiointerferometric data cube is either frequency, or velocity. Equolver interprets any velocity as radio velocity RAD with respect to a rest frequency nu0: VRAD = c*(nu0-nu)/nu0, where c is the speed of light and nu the frequency in a specific channel. The rest frequency nu0 s read from the header of each cube using the keyword \'RESTFREQ\'. Defaults can be entered using the parameter --bin_restfreq BIN_RESTFREQ, which can be entered sing the expansion scheme, and enforcing the usage of this direct input can be achieved by setting --bin_restfreq_replace True .')+'\n' +\  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('In a radio observation, without adding any additional weighting scheme for the visibilities that changes with frequency, the beam major and minor xes scale with the inverse of the frequency. With equolver, the user has the possibility to scale the beam to a \'normalisation\' frequency before deriving tatistics and/or scaling it back to the specific frequency per channel. This way, a common beam for the normalisation frequency can be calculated to then scale his beam to the specific channels, to then reconvolve the cube planes. With the parameter --bin_normfreq BIN_NORMFREQ (defaulting to 1.4 GHz) the user can enter his normalisation frequency. With the normalisation-frequency nf (see above), assuming that the beam sizes scale with 1/frequency we derive b(nf) = b(f)*f/nf , here b is major or minor axis HPBW. Also this parameter is expandable, but we strongly recommend not to use more than one value for all data cubes.')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Generating beam statistics (gen\'bst\'ats):')+'\n' + \  # noqa: E501
-    textwrap.fill('========================================')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('After reading the beam information, the user can generate statistics on the collected beam properties. The section can be omitted by setting --genbstats_exe False (Notice that this disables consecutive sections except plotting). The parameters --bst_parameter BST_PARAMETER, --bst_scaling BST_SCALING, --bst_sample BST_SAMPLE, and --bst_stype BST_STYPE determine which statistics are being calculated (by default all statistics are calculated, but a choice can accelerate the processing time). If for any of the parameters \'all\' is chosen (which is the default), all fields are filled. If the scaling type is \'constant\', the given (read) values for bmaj and bmin are evaluated, if \'frequency\' is chosen, all beam sizes are scaled to the same normalisation-frequency nf (see above), assuming that the beam sizes scale with 1/frequency. b(nf) = b(f)*f/nf . In the following, bsa is the beam solid angle of an individual (or average) beam, ceb the circular equivalent beam, the circular beam with a beam solid angle of bsa (sqrt(bmaj*bmin)). The parameters can be combined, and the following can be calculated:')+'\n' +\  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('--bst_parameter BST_PARAMETER', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('BST_PARAMETER:', initial_indent=8*' ', subsequent_indent=10*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'bmaj\'       major axis dispersions/hpbws', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'bmin\'       minor axis dispersions/hpbws', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'bpa\'        beam position angles',         initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'bsa\'        beam solid angle',             initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'ceb\'        circular equivalent beam dispersions/hpbws', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('--bst_scaling BST_SCALING', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('BST_SCALING:', initial_indent=8*' ', subsequent_indent=10*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'const\'      constant', initial_indent='            ', subsequent_indent='              ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'frequency\'  frequency', initial_indent='            ', subsequent_indent='              ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('--bst_stype BST_STYPE', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('BST_STYPE:', initial_indent=8*' ', subsequent_indent=10*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'minimum\'    Minimum',                   initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'maximum\'    Maximum',                   initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'average\'    Average',                   initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'stdev\'      Standard deviation',        initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'median\'     Median',                    initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'mad\'        Median-absolute-deviation', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'madstdev\'   Standard deviation calculated from the median-absolute-deviation', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'percentile\' Score at percents',         initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'commonbeam\' Common beam as calculated using the radio-beam module (https://radio-beam.readthedocs.io) based on the Khachiyan algorithm (https://n.wikipedia.org/wiki/Ellipsoid_method). Parameters bst_tolerance, bst_nsamps, epsilon are used for this method', initial_indent=12*' ', subsequent_indent=25*' ')'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('--bst_sample BST_SAMPLE', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('BST_SAMPLE:', initial_indent=8*' ', subsequent_indent=10*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'cube\'       Statistics to be carried out for all channels per cube (generates lists with length of the number of input cubes)', nitial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'chan\'       Statistics to be carried out for all cubes per channel (generates lists with a length of the maximum number of channels in any cube)', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'total\'      Statistics to be carried out for all channels in all cubes (generates a float)', initial_indent=12*' ', subsequent_indent=25*' ')'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('For some of those parameters, additional arguments are required. --bst_percents BST_PERCENTS is the number of percents for the percentile tatistics, while --bst_tolerance BST_TOLERANCE, the convergence tolerance, --bst_nsamps BST_NSAMPS, number of vertices of the polygon describing the elliptic eam, and --bst_epsilon, the allowance to overestimate the common beam area, --bst_maxiter BST_MAXITER, the maximum number of iterations to find a common beam, are pecific to the calculation of a common beam (see above, see https://radio-beam.readthedocs.io). Notice that equolver will not stop to search for a common beam. If  search fails, it will be re-started with a higher number of iterations and a higher tolerance.')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Generating (interactive) histograms for diagnostics (gen\'hist\'oplots)')+'\n' + \  # noqa: E501
-    textwrap.fill('=====================================================================')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Generates histograms of the beam properties and the statistics read in and generated in the previous sections. This will either produce static istograms (in png format) with the name HIST_PLOTNAME if the parameter --hist_plotname HIST_PLOTNAME is set and/or an interactive html file with the name IST_INTERACTIVE if the parameter --hist_interactive HIST_INTERACTIVE is set. With the parameter --hist_sample HIST_SAMPLE the user can choose which statistics hould be shown: \'cube\' means that the histogram is generated for each cube, \'chan\' means that it is generated for a specific channel in all cubes, \'total\' the default) means that the statistics for all channels in all cubes are shown in one plot. The parameter --hist_scaling HIST_SCALING decides if the statistics re plotted using the original beam properties (if HIST_SCALING is set to \'constant\') or if they are first scaled to the norm frequency (if HIST_SCALING is set o \'frequency\') assuming that the beam scales proportionally to the inverse of the frequency. With --hist_overwrite HIST_OVERWRITE the user indicates whether xisting files can be overwritten (if HIST_OVERWRITE is set to \'True\', the default is False).')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Generating (a) common beam(s) from statistics or direct input (gen\'tar\'get)')+'\n' + \  # noqa: E501
-    textwrap.fill(70*'=')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('The section generates the target beam properties (bmaj, bmin, bpa) for all input data cubes and all planes therein. The section can be omitted by etting --gentarget_exe False (Notice that this disables the consecutive section). They are generated as follows: For each quantity bmaj, bmin, bpa the parameters')'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('--tar_quant_inter TAR_QUANT_INTER (intercept, default: 0)', initial_indent=4*' ', subsequent_indent=22*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_quant_slope TAR_QUANT_SLOPE (slope, default: 0)', initial_indent=4*' ', subsequent_indent=22*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_quant_absc  TAR_QUANT_ABSC (abscissa, default: 0)', initial_indent=4*' ', subsequent_indent=22*' ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('result in the output quantity quant calculated as:')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('quant = TAR_QUANT_INTER + TAR_QUANT_SLOPE*TAR_QUANT_ABSC', initial_indent=4*' ', subsequent_indent=13*' ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('The parameters are either direct inputs of the target quantities following the expansion scheme described above. Alternatively, TAR_QUANT_INTER and AR_QUANT_ABSC can be a list of four strings, denoting (in that order) bst_parameter, bst_scaling, bst_stype, and bst_sample as described in the gen\'bst\'ats ection above. The corresponding values from the statistics will then be used. Notice that \'freq\' means the inverse of the transformation of the input beam info truct into the frequency-scaled one. Major and minor axis beams entered directly are then interpreted as beams at a frequency as specified in the parameter -normfreq NORMFREQ.')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Example (slightly artificial):')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_inter \"[\'bmaj\', \'frequency\', \'percentile\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_slope 0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_absc  0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_inter \"[\'bmaj\', \'frequency\', \'average\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_slope \"[\'bmaj\', \'frequency\', \'stdev\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_absc  3.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bpa_inter  \"[\'bpa\', \'frequency\',  \'average\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bpa_slope  0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bpa_absc   0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_scaling    frequency'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('This would use the percentile (at BST_PERCENTS) of the major axis (scaled to the normalisation frequency) of all planes in all data cubes for the arget major axis, the average of the major axis HPBWs (scaled to the normalisation frequency) of all planes in all data cubes plus 3 times the standard deviation f all planes in all data cubes for the target minor axes, and the average position angle of all planes in all data cubes. All results are scaled back from the ormalisation frequency to the actual frequency in each channel.')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    'Sensible choices are:''\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Use the (90%) percentile of the major axis HPWBs at the normalisation frequency as the target major and minor axes, scale back with frequency. This s the default:')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_inter \"[\'bmaj\', \'frequency\', \'percentile\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_slope 0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_absc  0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_inter \"[\'bmaj\', \'frequency\',  \'percentile\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_slope 0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_absc  0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bpa_inter  0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bpa_slope  0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bpa_absc   0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_scaling    frequency'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Use the average of the major axis HPWBs  at the normalisation frequency plus 3 sigma for major and minor HPBW, scale with 1/F:')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_inter \"[\'bmaj\', \'frequency\', \'average\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_slope \"[\'bmaj\', \'frequency\', \'stdev\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_absc  3.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_inter \"[\'bmaj\', \'frequency\',  \'percentile\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_slope \"[\'bmaj\', \'frequency\', \'stdev\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_absc  3.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Use the common beam at the normalisation frequency, scale with 1/F:')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_inter \"[\'bmaj\', \'frequency\', \'commonbeam\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_slope 0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmaj_absc  0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_inter \"[\'bmin\', \'frequency\',  \'commonbeam\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_slope 0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bmin_absc  0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bpa_inter  \"[\'bpa\', \'frequency\',  \'commonbeam\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bpa_slope  0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('--tar_bpa_absc   0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Generate a set of transformed images from the input with the beam properties derived (gen\'tra\'ns)')+'\n' + \  # noqa: E501
-    textwrap.fill(70*'=')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('The final section serially opens all cubes (images) listed in inc_cubes and generates cubes (de-)convolved to the resolution as specified in the target section. The section can be omitted by setting --gentrans_exe False. If executed the section optionally convolves all cubes listed in --tra_modelnames TRA_MODELNAMES with the respective Gaussians and adds those to the output. If given, the number of cubes listed as TRA_MODELNAMES and the dimensionality of the cubes must be identical to the one of the input cubes (specified through INC_CUBES). While from a mathematical viewpoint the de-convolution to smaller beams should work, this is in practice limited by numerical effects. To handle such situations, equolver provides several strategies, specified with the parameter --tra_mode TRA_MODE. A (de-)convolution is declared a success or a failure by comparing for the input and output plane the sum of the pixels of the plane divided by the beam solid angle. If the ratio of the larger sum divided by the smaller sum is larger than the parameter --tra_tol TRA_TOL (default: 2), the total power hence changes significally, the (de-)convolution is flagged a failure. In addition, --tra_maxker TRA_MAXKER allows the user to manually set the maximum in the FT of a kernel as an alternative way to decide whether a reconvolution is bound to fail.')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    'The mode of the deconvolution is determined with TRA_MODE as follows:'+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('\'scale\':  Do not convolve but scale the intensity to the target beam (divide by original beam solid angle and multiply with target beam solid ngle.)', initial_indent=4*' ', subsequent_indent=14*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'mask\':   (De-)convolve and mask channel in the output if the deconvolution fails.', initial_indent=4*' ', subsequent_indent=14*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'hybrid\': Attempt to (de-) convolve the plane and fall back to \'scale\' if the (de-)convolution fails.', initial_indent=4*' ', ubsequent_indent=14*' ')+'\n' + \  # noqa: E501
-    textwrap.fill('\'max\':    Attempt to (de-) convolve the plane. If that fails, convolve along the beam minor axis to the target minor beam if that is larger than he original. Then scale.', initial_indent=4*' ', subsequent_indent=14*' ')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('If parameter --tra_hdmode TRA_HDMODE is set to True, a keyword \'EQMODE\' with the value of TRA_MODE is added to the header. In addition, if RA_MODE is not set to \'scale\' or \'mask\', any plane for which the first convolution failed, is highlighted by the keyword-value pair EQS_i = \'SCALE\' or EQSC  \'HYBRID\'. i in this context is the plane number (Fortran/FITS style: starting with 1).')+'\n' + \  # noqa: E501
-    '\n' + \  # noqa: E501
-    textwrap.fill('Finally, the user can generate beam properties in the header of the output cubes. If --tra_commonbeam TRA_COMMONBEAM is set to \'True\', the average eam properties are calculated and inserted into the header as \'BMAJ\', \'BMIN\', \'BPA\'. In addition the keyword \'BEAMSCAL\' is added to the header and its alue set to \'CONSTANT\' if the beam frequency scaling is de-activated and hence TAR_SCALING is set to \'False\'. It is set to \'1/F\' if the beam frequency caling is activated and hence TAR_SCALING is set to \'True\'.') + \  # noqa: E501
-    '\n'
+        '\n' + \
+    textwrap.fill('The resolution of a radioastronomical image is usually represented by a two-dimensional Gaussian, the (clean) beam, whose properties are known, and which is described by having an amplitude of 1 and a major- and minor axis of the ellipse at its half-power level (major axis \"half-power-beam-width\" (HPBW), or minor axis HPBW), as well as the position angle of the major axis (measuered anticlockwise from the North). The intensity (spectral brightness) in radioastronomical images is assumed to be the true sky brightness convolved with the individual Gaussians. In the following, parameters or quantities with suffixes, mediumfixes, or prefixes \'bmaj\' or \'BMAJ\' are related to the beam major axis HPBW, parameters or quantities with suffixes, mediumfixes, or prefixes \'bmin\' or \'BMIN\' are related to the beam major axis HPBW, parameters or quantities with suffixes, mediumfixes, or prefixes \'bpa\' or \'BPA\' are related to the beam majore axis position angle.')+'\n' + \
+    '\n' + \
+    textwrap.fill('The module takes two sets of images or spectroscopic data cubes in FITS format as an input. One is assumed to contain (part of) the sky brightness convolved with a beam (a \"restored image\" or a \"resiudual\"), the other is assumed to be a sky model, which is not yet convolved with the beam. Equolver re-convolves each image/plane in the first data set to a common beam, or a set of common beams, which can be shared among all cubes, all planes, or within individual cubes. whose properties can be derived from the statistics of the known beams. To do so, the images are Fourier-transformed, then divided by the Fourier-transform of the original beam, multiplied with the Fourier-transform of the target beam, and Fourier-transformed back. Alternatively the images are scaled with the integral of the target beam (the target beam-solid-angle, BSA) divided by the BSA of the original beam. Hybrid approaches are also possible, see below. The images/planes in the second data set (the model) only get convolved with the target beam. Then both images are added.')+'\n' + \
+    '\n' + \
+    textwrap.fill('In the following we provide a detailed description of the module and its input parameters. In some cases, the manual refers to lists as input parameters. Those are entered in Python style, as comma-separated lists of values enclosed by opening and closing brackets. Strings not entered inside a list can be entered without quotes, inside lists, strings should be enclosed by single- and double quotes. As many shell interpreters would interpret quotes themselves, the user has to take care for the right format. If the user wants e.g. to enter the list [\'foo\', \'fooly\'], on the command line in bash or csh this may have to be entered as e.g. --parameter \"[\'foo\', \'fooly\']\" (notice the double quotes).')+'\n' + \
+    '\n' + \
+    textwrap.fill('Equolver potentially goes through four steps, with the parameter prefixes indicating to which step they belong:')+'\n' + \
+    '\n' + \
+    textwrap.fill('- Reading cubes with beam information (gen\'inc\'ubus)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('- Reading the beam information (gen\'bin\'fo)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('- Generating beam statistics (gen\'bst\'ats)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('- Generating (interactive) histograms for diagnostics (gen\'hist\'oplots)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('- Generating (a) common beam(s) from statistics or direct input (gen\'tar\'get)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('- Generate a set of transformed images from the input with the beam properties derived (gen\'tra\'ns)', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    '\n' + \
+    'Reading cubes (gen\'inc\'ubus):'+'\n' + \
+    textwrap.fill('============================')+'\n' + \
+    '\n' + \
+    textwrap.fill('The user specifies the input cubes containing the beam information with --inc_cubes INC_CUBES or -i INC_CUBES, where INC_CUBES is either a string with the ame of the single data cube (image) or a list of strings with the names of the cubes (images). These can be the ones meant to be re-convolved or just cubes with the beam information.')+'\n' + \
+    '\n' + \
+    textwrap.fill('Expansion scheme for parameters:')+'\n' + \
+    textwrap.fill('===============================')+'\n' + \
+    '\n' + \
+    textwrap.fill('Some parameters can take multiple formats, referring to the input list of cubes/images: The user can enter single values for all planes in all cubes/mages. The user can instead enter lists, where each value of the list corresponds to all planes in a data cube with the same index. If the user enters a list of ists, each member of the list (which is also a list) corresponds to a data cube/image with the same index, and its elements correspond to the planes in the orresponding data cube. Values can be entered in astropy syntax as strings of as floats, where the units are degrees or Hz.')+'\n' + \
+    '\n' + \
+    textwrap.fill('Example:')+'\n' + \
+    '\n' + \
+    textwrap.fill('cube1.fits and cube2.fits each contain 3 planes (with indices from 0 to 2), and the user specifies -i \"[\'cube1\', \'cube2\']\".')+'\n' + \
+    '\n' + \
+    textwrap.fill('- The user specifies --bin_bmaj 0.002 -> for all planes in both cubes the input bmaj is 0.002 degrees', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('- The user specifies --bin_bmaj \"[0.002, \'1 arcmin\']\" -> for all planes in cube1.fits the input bmaj is 0.002 degrees, for all planes in cube2.fits the input bmaj is 1 arcminute.', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('- The user specifies --bin_bmaj \"[[0.01, 0.02, 0.03], [0.04, 0.05, 0.06]]\" -> input bmaj is 0.01 deg for cube1.fits plane 0, 0.02 deg for cube1.fits plane 1, 0.03 deg for cube1.fits plane 2, 0.04 deg for cube2.fits plane 0, 0.05 deg for cube2.fits plane 1, 0.06 deg for cube2.fits plane 2.', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('Reading the beam information (gen\'bin\'fo):')+'\n' + \
+    textwrap.fill('=========================================')+'\n' + \
+    '\n' + \
+    textwrap.fill('If present, the beam properties of the individual images (planes) are read from the FITS headers of INC_CUBES (see \'Reading cubes\'), in which they ave a format BMAJ_NNN, BMIN_NNN, BPA_NNN, where NNN is the plane number, starting with 1. If the keywords BMAJ, BMIN, BPA (without suffix) are present in the eader, they serve as a default value for the respective plane-specific specifications. Alternatively, the user can directly provide the default values using -bin_bmaj BIN_BMAJ, --bin_bmin BIN_BMIN, and --bin_bpa BIN_BPA, following the expansion scheme for parameters: using this direct input, the user can provide one umber for all channels and cubes/images, a list of numbers, providing one number per cube, and a list of lists, providing a list of numbers (per channel) for each cube. If switch --bin_bmaj_replace is set, the header values BMAJ or BMAJ_NNN in the data cubes are ignored and the input (\"default\") values are read in instead. If switch --bin_bmin_replace is set, the header values BMIN or BMIN_NNN in the data cubes are ignored and the input (\"default\") values are read in instead. If switch -bin_bpa_replace is set, the header values BPA or BPA_NNN in the data cubes are ignored and the input (\"default\") values are read in instead.')+'\n' + \
+    '\n' + \
+    textwrap.fill('By nature, the third axis of a radiointerferometric data cube is either frequency, or velocity. Equolver interprets any velocity as radio velocity RAD with respect to a rest frequency nu0: VRAD = c*(nu0-nu)/nu0, where c is the speed of light and nu the frequency in a specific channel. The rest frequency nu0 s read from the header of each cube using the keyword \'RESTFREQ\'. Defaults can be entered using the parameter --bin_restfreq BIN_RESTFREQ, which can be entered sing the expansion scheme, and enforcing the usage of this direct input can be achieved by setting switch --bin_restfreq_replace.')+'\n' +\
+    '\n' + \
+    textwrap.fill('In a radio observation, without adding any additional weighting scheme for the visibilities that changes with frequency, the beam major and minor xes scale with the inverse of the frequency. With equolver, the user has the possibility to scale the beam to a \'normalisation\' frequency before deriving tatistics and/or scaling it back to the specific frequency per channel. This way, a common beam for the normalisation frequency can be calculated to then scale his beam to the specific channels, to then reconvolve the cube planes. With the parameter --bin_normfreq BIN_NORMFREQ (defaulting to 1.4 GHz) the user can enter his normalisation frequency. With the normalisation-frequency nf (see above), assuming that the beam sizes scale with 1/frequency we derive b(nf) = b(f)*f/nf , here b is major or minor axis HPBW. Also this parameter is expandable, but we strongly recommend not to use more than one value for all data cubes.')+'\n' + \
+    '\n' + \
+    textwrap.fill('Generating beam statistics (gen\'bst\'ats):')+'\n' + \
+    textwrap.fill('========================================')+'\n' + \
+    '\n' + \
+    textwrap.fill('After reading the beam information, the user can generate statistics on the collected beam properties. The section can be omitted by setting the switch --genbstats_suppress (Notice that this disables consecutive sections except plotting). The parameters --bst_parameter BST_PARAMETER, --bst_scaling BST_SCALING, --bst_sample BST_SAMPLE, and --bst_stype BST_STYPE determine which statistics are being calculated (by default all statistics are calculated, but a choice can accelerate the processing time). If for any of the parameters \'all\' is chosen (which is the default), all fields are filled. If the scaling type is \'constant\', the given (read) values for bmaj and bmin are evaluated, if \'frequency\' is chosen, all beam sizes are scaled to the same normalisation-frequency nf (see above), assuming that the beam sizes scale with 1/frequency. b(nf) = b(f)*f/nf . In the following, bsa is the beam solid angle of an individual (or average) beam, ceb the circular equivalent beam, the circular beam with a beam solid angle of bsa (sqrt(bmaj*bmin)). The parameters can be combined, and the following can be calculated:')+'\n' +\
+    '\n' + \
+    textwrap.fill('--bst_parameter BST_PARAMETER', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('BST_PARAMETER:', initial_indent=8*' ', subsequent_indent=10*' ')+'\n' + \
+    textwrap.fill('\'bmaj\'       major axis dispersions/hpbws', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'bmin\'       minor axis dispersions/hpbws', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'bpa\'        beam position angles',         initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'bsa\'        beam solid angle',             initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'ceb\'        circular equivalent beam dispersions/hpbws', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('--bst_scaling BST_SCALING', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('BST_SCALING:', initial_indent=8*' ', subsequent_indent=10*' ')+'\n' + \
+    textwrap.fill('\'const\'      constant', initial_indent='            ', subsequent_indent='              ')+'\n' + \
+    textwrap.fill('\'frequency\'  frequency', initial_indent='            ', subsequent_indent='              ')+'\n' + \
+    '\n' + \
+    textwrap.fill('--bst_stype BST_STYPE', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('BST_STYPE:', initial_indent=8*' ', subsequent_indent=10*' ')+'\n' + \
+    textwrap.fill('\'minimum\'    Minimum',                   initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'maximum\'    Maximum',                   initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'average\'    Average',                   initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'stdev\'      Standard deviation',        initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'median\'     Median',                    initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'mad\'        Median-absolute-deviation', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'madstdev\'   Standard deviation calculated from the median-absolute-deviation', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'percentile\' Score at percents',         initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'commonbeam\' Common beam as calculated using the radio-beam module (https://radio-beam.readthedocs.io) based on the Khachiyan algorithm (https://n.wikipedia.org/wiki/Ellipsoid_method). Parameters bst_tolerance, bst_nsamps, epsilon are used for this method', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('--bst_sample BST_SAMPLE', initial_indent=4*' ', subsequent_indent=6*' ')+'\n' + \
+    textwrap.fill('BST_SAMPLE:', initial_indent=8*' ', subsequent_indent=10*' ')+'\n' + \
+    textwrap.fill('\'cube\'       Statistics to be carried out for all channels per cube (generates lists with length of the number of input cubes)', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'chan\'       Statistics to be carried out for all cubes per channel (generates lists with a length of the maximum number of channels in any cube)', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    textwrap.fill('\'total\'      Statistics to be carried out for all channels in all cubes (generates a float)', initial_indent=12*' ', subsequent_indent=25*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('For some of those parameters, additional arguments are required. --bst_percents BST_PERCENTS is the number of percents for the percentile tatistics, while --bst_tolerance BST_TOLERANCE, the convergence tolerance, --bst_nsamps BST_NSAMPS, number of vertices of the polygon describing the elliptic eam, and --bst_epsilon, the allowance to overestimate the common beam area, --bst_maxiter BST_MAXITER, the maximum number of iterations to find a common beam, are pecific to the calculation of a common beam (see above, see https://radio-beam.readthedocs.io). Notice that equolver will not stop to search for a common beam. If  search fails, it will be re-started with a higher number of iterations and a higher tolerance.')+'\n' + \
+    '\n' + \
+    textwrap.fill('Generating (interactive) histograms for diagnostics (gen\'hist\'oplots)')+'\n' + \
+    textwrap.fill('=====================================================================')+'\n' + \
+    '\n' + \
+    textwrap.fill('Generates histograms of the beam properties and the statistics read in and generated in the previous sections. This will either produce static istograms (in png format) with the name HIST_PLOTNAME if the parameter --hist_plotname HIST_PLOTNAME is set and/or an interactive html file with the name IST_INTERACTIVE if the parameter --hist_interactive HIST_INTERACTIVE is set. With the parameter --hist_sample HIST_SAMPLE the user can choose which statistics hould be shown: \'cube\' means that the histogram is generated for each cube, \'chan\' means that it is generated for a specific channel in all cubes, \'total\' the default) means that the statistics for all channels in all cubes are shown in one plot. The parameter --hist_scaling HIST_SCALING decides if the statistics re plotted using the original beam properties (if HIST_SCALING is set to \'constant\') or if they are first scaled to the norm frequency (if HIST_SCALING is set o \'frequency\') assuming that the beam scales proportionally to the inverse of the frequency. By setting switch --hist_overwrite the user indicates whether existing files can be overwritten.')+'\n' + \
+    '\n' + \
+    textwrap.fill('Generating (a) common beam(s) from statistics or direct input (gen\'tar\'get)')+'\n' + \
+    textwrap.fill(70*'=')+'\n' + \
+    '\n' + \
+    textwrap.fill('The section generates the target beam properties (bmaj, bmin, bpa) for all input data cubes and all planes therein. The section can be omitted by setting the switch --gentarget_suppress (Notice that this disables the consecutive section). They are generated as follows: For each quantity bmaj, bmin, bpa the parameters')+'\n' + \
+    '\n' + \
+    textwrap.fill('--tar_quant_inter TAR_QUANT_INTER (intercept, default: 0)', initial_indent=4*' ', subsequent_indent=22*' ')+'\n' + \
+    textwrap.fill('--tar_quant_slope TAR_QUANT_SLOPE (slope, default: 0)', initial_indent=4*' ', subsequent_indent=22*' ')+'\n' + \
+    textwrap.fill('--tar_quant_absc  TAR_QUANT_ABSC (abscissa, default: 0)', initial_indent=4*' ', subsequent_indent=22*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('result in the output quantity quant calculated as:')+'\n' + \
+    '\n' + \
+    textwrap.fill('quant = TAR_QUANT_INTER + TAR_QUANT_SLOPE*TAR_QUANT_ABSC', initial_indent=4*' ', subsequent_indent=13*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('The parameters are either direct inputs of the target quantities following the expansion scheme described above. Alternatively, TAR_QUANT_INTER and AR_QUANT_ABSC can be a list of four strings, denoting (in that order) bst_parameter, bst_scaling, bst_stype, and bst_sample as described in the gen\'bst\'ats ection above. The corresponding values from the statistics will then be used. Notice that \'freq\' means the inverse of the transformation of the input beam info truct into the frequency-scaled one. Major and minor axis beams entered directly are then interpreted as beams at a frequency as specified in the parameter -normfreq NORMFREQ.')+'\n' + \
+    '\n' + \
+    textwrap.fill('Example (slightly artificial):')+'\n' + \
+    '\n' + \
+    textwrap.fill('--tar_bmaj_inter \"[\'bmaj\', \'frequency\', \'percentile\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmaj_slope 0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmaj_absc  0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_inter \"[\'bmaj\', \'frequency\', \'average\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_slope \"[\'bmaj\', \'frequency\', \'stdev\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_absc  3.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bpa_inter  \"[\'bpa\', \'frequency\',  \'average\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bpa_slope  0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bpa_absc   0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_scaling    frequency'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('This would use the percentile (at BST_PERCENTS) of the major axis (scaled to the normalisation frequency) of all planes in all data cubes for the arget major axis, the average of the major axis HPBWs (scaled to the normalisation frequency) of all planes in all data cubes plus 3 times the standard deviation f all planes in all data cubes for the target minor axes, and the average position angle of all planes in all data cubes. All results are scaled back from the ormalisation frequency to the actual frequency in each channel.')+'\n' + \
+    '\n' + \
+    'Sensible choices are:''\n' + \
+    '\n' + \
+    textwrap.fill('Use the (90%) percentile of the major axis HPWBs at the normalisation frequency as the target major and minor axes, scale back with frequency. This s the default:')+'\n' + \
+    '\n' + \
+    textwrap.fill('--tar_bmaj_inter \"[\'bmaj\', \'frequency\', \'percentile\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmaj_slope 0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmaj_absc  0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_inter \"[\'bmaj\', \'frequency\',  \'percentile\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_slope 0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_absc  0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bpa_inter  0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bpa_slope  0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bpa_absc   0.0'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_scaling    frequency'+'\n', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('Use the average of the major axis HPWBs  at the normalisation frequency plus 3 sigma for major and minor HPBW, scale with 1/F:')+'\n' + \
+    '\n' + \
+    textwrap.fill('--tar_bmaj_inter \"[\'bmaj\', \'frequency\', \'average\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmaj_slope \"[\'bmaj\', \'frequency\', \'stdev\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmaj_absc  3.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_inter \"[\'bmaj\', \'frequency\',  \'percentile\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_slope \"[\'bmaj\', \'frequency\', \'stdev\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_absc  3.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('Use the common beam at the normalisation frequency, scale with 1/F:')+'\n' + \
+    '\n' + \
+    textwrap.fill('--tar_bmaj_inter \"[\'bmaj\', \'frequency\', \'commonbeam\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmaj_slope 0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmaj_absc  0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_inter \"[\'bmin\', \'frequency\',  \'commonbeam\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_slope 0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bmin_absc  0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bpa_inter  \"[\'bpa\', \'frequency\',  \'commonbeam\', \'total\']\"', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bpa_slope  0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    textwrap.fill('--tar_bpa_absc   0.0', initial_indent=4*' ', subsequent_indent=21*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('Generate a set of transformed images from the input with the beam properties derived (gen\'tra\'ns)')+'\n' + \
+    textwrap.fill(70*'=')+'\n' + \
+    '\n' + \
+    textwrap.fill('The final section serially opens all cubes (images) listed in tra_residualnames (defaulting to INC_CUBES) and generates cubes (de-)convolved to the resolution as specified in the target section. The section can be omitted by setting the switch --gentrans_suppress. If executed the section optionally convolves all cubes listed in --tra_modelnames TRA_MODELNAMES with the respective Gaussians and adds those to the output. If given, the number of cubes listed as TRA_MODELNAMES and the dimensionality of the cubes must be identical to the one of the input cubes (specified through INC_CUBES). While from a mathematical viewpoint the de-convolution to smaller beams should work, this is in practice limited by numerical effects. To handle such situations, equolver provides several strategies, specified with the parameter --tra_mode TRA_MODE. A (de-)convolution is declared a success or a failure by comparing for the input and output plane the sum of the pixels of the plane divided by the beam solid angle. If the ratio of the larger sum divided by the smaller sum is larger than the parameter --tra_tol TRA_TOL (default: 2), the total power hence changes significally, the (de-)convolution is flagged a failure. In addition, --tra_maxker TRA_MAXKER allows the user to manually set the maximum in the FT of a kernel as an alternative way to decide whether a reconvolution is bound to fail.')+'\n' + \
+    '\n' + \
+    'The mode of the deconvolution is determined with TRA_MODE as follows:'+'\n' + \
+    '\n' + \
+    textwrap.fill('\'scale\':  Do not convolve but scale the intensity to the target beam (divide by original beam solid angle and multiply with target beam solid ngle.)', initial_indent=4*' ', subsequent_indent=14*' ')+'\n' + \
+    textwrap.fill('\'mask\':   (De-)convolve and mask channel in the output if the deconvolution fails.', initial_indent=4*' ', subsequent_indent=14*' ')+'\n' + \
+    textwrap.fill('\'hybrid\': Attempt to (de-) convolve the plane and fall back to \'scale\' if the (de-)convolution fails.', initial_indent=4*' ', subsequent_indent=14*' ')+'\n' + \
+    textwrap.fill('\'max\':    Attempt to (de-) convolve the plane. If that fails, convolve along the beam minor axis to the target minor beam if that is larger than he original. Then scale.', initial_indent=4*' ', subsequent_indent=14*' ')+'\n' + \
+    '\n' + \
+    textwrap.fill('If the switch --tra_no_hdmode is not set, a keyword \'EQMODE\' with the value of TRA_MODE is added to the header. In addition, if RA_MODE is not set to \'scale\' or \'mask\', any plane for which the first convolution failed, is highlighted by the keyword-value pair EQS_i = \'SCALE\' or EQSC  \'HYBRID\'. i in this context is the plane number (Fortran/FITS style: starting with 1).')+'\n' + \
+    '\n' + \
+    textwrap.fill('Finally, the user can generate beam properties in the header of the output cubes. If switch --tra_no_commonbeam is not set, the average beam properties are calculated and inserted into the header as \'BMAJ\', \'BMIN\', \'BPA\'. If switch --tra_no_indibeam is not set, the beam properties are inserted into the header as \'BMAJ_i\', \'BMIN_i\', \'BPA_i\', where i is the image plane number (starting at 0). In addition the keyword \'BEAMSCAL\' is added to the header and its alue set to \'CONSTANT\' if the beam frequency scaling is de-activated and hence TAR_SCALING is set to \'input\'. It is set to \'1/F\' if the beam frequency scaling is activated and hence TAR_SCALING is set to \'frequency\'. The output data sets will be overwritten if switch --tra_overwrite is set') + \
+    '\n'  # noqa: E501
 
 
 def parsing():
@@ -5443,131 +5496,179 @@ def parsing():
                                      argument_default=argparse.SUPPRESS)
 
     # Common
-    parser.add_argument('--threads', help='Number of threads')
+    parser.add_argument('--threads', help='Number of threads', type=int)
     parser.add_argument('--version', action='version', version=version)
-    parser.add_argument('--verb', '-v', help='Verbose output? \'True\': yes')
-
+    parser.add_argument('--verb', '-v', default=False, action='store_true',
+                        help='Verbose output? If flag is set: yes')
     # gen
     parser.add_argument('--inc_cubes', '-i',
                         help='Input cubes: names or list of names, python ' +
-                             'style')
-
+                             'style', type=str)
     # genbinput
     parser.add_argument('--bin_bmaj',
                         help='Beam major axis default value(s), format see ' +
-                             'below')
+                             'verbose description', type=str)
     parser.add_argument('--bin_bmaj_replace',
-                        help='Enforce usage of default values bin_bmaj? ' +
-                             '(True = yes)')
+                        help='Switch to enforce usage of default value(s) ' +
+                        'bin_bmaj', default=False, action='store_true')
     parser.add_argument('--bin_bmin',
                         help='Beam minor axis default value(s), format see ' +
-                             'below')
+                             'verbose description', type=str)
     parser.add_argument('--bin_bmin_replace',
-                        help='Enforce usage of default values bin_bmin? ' +
-                             '(True = yes)')
+                        help='Switch to enforce usage of default value(s)' +
+                        'bin_bmin', default = False, action= 'store_true')
     parser.add_argument('--bin_bpa',
                         help='Beam position angle default value(s), format '
-                             'see below')
+                             'see verbose description', type=str)
     parser.add_argument('--bin_bpa_replace',
-                        help='Enforce usage of default values bin_bpa? ' +
-                             '(True = yes)')
+                        help='Switch to enforce usage of default values' +
+                        'bin_bpa', default = False, action= 'store_true')
     parser.add_argument('--bin_restfreq',
                         help='Rest frequency default value(s), format see ' +
-                             'below')
+                             'verbose description', type=str)
     parser.add_argument('--bin_restfreq_replace',
-                        help='Enforce usage of default values bin_restfreq?')
+                        help='Switch to enforce usage of default values' +
+                        'bin_restfreq',
+                        default = False, action= 'store_true')
     parser.add_argument('--bin_normfreq',
                         help='Frequency in Hz to normalize beam to if mode ' +
-                             'is \'frequency\'')
+                             'is \'frequency\'', type=float)
 
-    parser.add_argument('--genbstats_exe',
-                        help='Generate beam statistics (\'True\': yes)')
+    parser.add_argument('--genbstats_suppress',
+                        help='Switch to suppress generation of beam statistics',
+                        default = False, action= 'store_true')
     parser.add_argument('--bst_parameter',
                         help='Parameter name (\'all\', \bmaj\', \'bmin\', ' +
-                             '\'bpa\', \'bsa\', \'ceb\')')
+                             '\'bpa\', \'bsa\', \'ceb\')', type=str)
     parser.add_argument('--bst_scaling',
                         help='Scaling type (\'all\', \'constant\', ' +
-                             '\'frequency\')')
+                             '\'frequency\')', type=str)
     parser.add_argument('--bst_stype',
                         help='Type of statistics to calculate (\'all\', ' +
                              '\'minimum\', \'maximum\', \'average\', ' +
                              '\'stdev\', \'median\', \'mad\', \'madstdev\', ' +
-                             '\'percentile\', \'percents\', \'commonbeam\')')
+                             '\'percentile\', \'percents\', \'commonbeam\')',
+                        type=str)
     parser.add_argument('--bst_sample',
                         help='Sample(s) to calculate statistics on ' +
-                             '(\'all\', \'cube\', \'chan\', \'total\')')
+                             '(\'all\', \'cube\', \'chan\', \'total\')',
+                        type=str)
     parser.add_argument('--bst_percents',  help='Percents for the ' +
-                        'percentile statistics')
+                        'percentile statistics', type=float)
     parser.add_argument('--bst_tolerance',
-                        help='Tolerance for searching the common beam')
+                        help='Tolerance for searching the common beam',
+                        type=float)
     parser.add_argument('--bst_nsamps',
-                        help='Number of edges of beam for common beam')
+                        help='Number of edges of beam for common beam',
+                        type=int)
     parser.add_argument('--bst_epsilon',
-                        help='Epsilon to search for common beam')
+                        help='Epsilon to search for common beam',
+                        type=float)
     parser.add_argument('--bst_maxiter',
-                        help='Maximum iterations to search for common beam')
+                        help='Maximum iterations to search for common beam',
+                        type=int)
 
-    parser.add_argument('--hist_plotname', help='Name of static plot')
-    parser.add_argument('--hist_interactive', help='Name of interactive plot')
+    parser.add_argument('--hist_plotname', help='Name of static plot', type=str)
+    parser.add_argument('--hist_interactive', help='Name of interactive plot',
+                        type=str)
     parser.add_argument('--hist_sample',
-                        help='Sample to plot \'cube\', \'chan\', or \'total\'')
+                        help='Sample to plot \'cube\', \'chan\', or \'total\'',
+                        type=str)
     parser.add_argument('--hist_scaling',
-                        help='Scaling to use (\'frequency\' or \'constant\')')
+                        help='Scaling to use (\'frequency\' or \'constant\')',
+                        type=str)
     parser.add_argument('--hist_overwrite',
-                        help='Allow overwriting files produced before')
-
-    parser.add_argument('--gentarget_exe',
-                        help='Generate target beams (\'True\': yes)')
+                        help='Switch to allow overwriting histograms',
+                        default = False, action= 'store_true')
+    parser.add_argument('--gentarget_suppress',
+                        help='Switch to suppress the generation of target beams',
+                        default = False, action= 'store_true')
     parser.add_argument('--tar_bmaj_inter',
-                        help='Beam major axis intercept')
-    parser.add_argument('--tar_bmaj_slope', help='Beam major axis slope')
+                        help='Beam major axis intercept (variable format)',
+                        type=str)
+    parser.add_argument('--tar_bmaj_slope', help='Beam major axis slope ' +
+                        '(variable format)', type=str)
     parser.add_argument('--tar_bmaj_absc',
-                        help='Beam major axis abscissae')
+                        help='Beam major axis abscissae (variable format)',
+                        type=str)
     parser.add_argument('--tar_bmin_inter',
-                        help='Beam minor axis intercept')
-    parser.add_argument('--tar_bmin_slope', help='Beam minor axis slope')
+                        help='Beam minor axis intercept (variable format)',
+                        type=str)
+    parser.add_argument('--tar_bmin_slope', help='Beam minor axis slope ' +
+                        '(variable format)', type=str)
     parser.add_argument('--tar_bmin_absc',
-                        help='Beam minor axis abscissae')
+                        help='Beam minor axis abscissae (variable format)',
+                        type=str)
     parser.add_argument('--tar_bpa_inter',
-                        help='Beam position angle axis intercept')
+                        help='Beam position angle axis intercept (variable ' +
+                        'format)', type=str)
     parser.add_argument('--tar_bpa_slope',
-                        help='Beam position angle axis slope')
+                        help='Beam position angle axis slope (variable format)',
+                        type=str)
     parser.add_argument('--tar_bpa_absc',
-                        help='Beam position angle abscissae')
+                        help='Beam position angle abscissae (variable format)',
+                        type=str)
     parser.add_argument('--tar_scaling',
                         help='Use 1/F scaling when calculating the target ' +
-                             'array, either \'frequency\' or \'input\'')
+                             'array, either \'frequency\' or \'input\'',
+                        type=str)
 
-    parser.add_argument('--gentrans_exe',
-                        help='Generate transformed cubes (\'True\': yes)')
+    parser.add_argument('--gentrans_suppress',
+                        help='Switch to suppress the generation of transformed cubes',
+                        default = False, action= 'store_true')
     parser.add_argument('--tra_modelnames', '-m',
-                        help='Input fits file names, containing the models.')
+                        help='Input fits file names, containing the models.',
+                        type=str)
+    parser.add_argument('--tra_residualnames', '-r',
+                        help='Input fits file names, containing the residuals.',
+                        type=str)
     parser.add_argument('--tra_fitsnames', '-o',
-                        help='Output fits file names.')
+                        help='Output fits file names.', type=str)
     parser.add_argument('--tra_mode',
-                        help='\'scale\', \'mask\', \'hybrid\', \'max\'')
+                        help='\'scale\', \'mask\', \'hybrid\', \'max\'',
+                        type=str)
     parser.add_argument('--tra_tol',
-                        help='tolerance to determine if convolution failed')
+                        help='tolerance to determine if convolution failed',
+                        type=float)
     parser.add_argument('--tra_maxker',
                         help='Maximum value that the FT of the convolution' +
                              'kernel can assume, will assume failure if ' +
-                             'larger')
-    parser.add_argument('--tra_commonbeam',
-                        help='Generate common (average) beam information in ' +
-                             'header')
-    parser.add_argument('--tra_indibeam',
-                        help='Generate individual beam information in header')
-    parser.add_argument('--tra_hdmode',
-                        help='Generate information about ' +
-                             'scaling/convolution in header')
+                             'larger', type=float)
+    parser.add_argument('--tra_no_commonbeam',
+                        help='Switch to suppress common (average) beam information in ' +
+                             'header', default = False, action= 'store_true')
+    parser.add_argument('--tra_no_indibeam',
+                        help='Switch to suppress individual beam information in ' +
+                        'header', default = False, action= 'store_true')
+    parser.add_argument('--tra_no_hdmode',
+                        help='Switch to suppress information about ' +
+                             'scaling/convolution in header', default = False, action= 'store_true')
     parser.add_argument('--tra_overwrite',
-                        help='Overwrite output if already existent ' +
-                             '(\'True\': yes)?')
+                        help='Switch to allow overwriting existing output ' +
+                        'data sets', default = False, action= 'store_true')
 
     whatnot = parser.parse_args()
     inpars = vars(whatnot)
 
-    for key in inpars.keys():
+    print('**********************')
+    print('**********************')
+    print('**********************')
+    print(inpars)
+    print('**********************')
+    print('**********************')
+    inpars['genbstats_exe'] = not inpars['genbstats_suppress']
+    inpars.pop('genbstats_suppress')
+    inpars['gentarget_exe'] = not inpars['gentarget_suppress']
+    inpars.pop('gentarget_suppress')
+    inpars['gentrans_exe'] = not inpars['gentrans_suppress']
+    inpars.pop('gentrans_suppress')
+    inpars['tra_hdmode'] = not inpars['tra_no_hdmode']
+    inpars.pop('tra_no_hdmode')
+    inpars['tra_commonbeam'] = not inpars['tra_no_commonbeam']
+    inpars.pop('tra_no_commonbeam')
+    inpars['tra_indibeam'] = not inpars['tra_no_indibeam']
+    inpars.pop('tra_no_indibeam')
+    for key in list(inpars.keys()):
         try:
             result = eval(inpars[key])
         except Exception:
@@ -5578,7 +5679,7 @@ def parsing():
     #     print(inpars['inc_cubes'])
     #     if inpars['inc_cubes'] == True:
     #         print('yo')
-
+    # sys.exit()
     return inpars
 
 
@@ -5588,8 +5689,10 @@ def runtime():
         if argument in kwargs.keys():
             sys.exit()
     Beach(**kwargs)
+    print("shitto")
+    print(kwargs)
 
 
 if __name__ == '__main__':
-    testing()
-    # runtime()
+    #testing()
+    runtime()
