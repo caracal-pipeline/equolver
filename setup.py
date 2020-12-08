@@ -21,7 +21,7 @@ extras_require = {
 }
 
 PACKAGE_NAME = 'equolver'
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 setup(name=PACKAGE_NAME,
       version=__version__,
