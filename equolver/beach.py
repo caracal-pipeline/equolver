@@ -17,7 +17,7 @@ import argparse
 import sys
 import textwrap
 
-version = '0.0.7'
+version = '0.0.8'
 
 
 class Beach:
@@ -2706,8 +2706,6 @@ class Beach:
             # Unit of this one has to be deg
             bpa = array[:, 2] * u.deg
 
-            print('bmaj', bmaj)
-
             my_beams = radio_beam.Beams(bmaj, bmin, bpa)
 
             repeat = True
@@ -3281,7 +3279,6 @@ class Beach:
 
         if stop:
             if verb or self._verb:
-                print('er')
                 warnings.warn(
                     'Parameters missing. Not generating target properties.')
             return
@@ -3702,8 +3699,7 @@ class Beach:
 
                                     # Check again
                                     if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
-                                        print('This here')
-                                        failure_again = True
+                                         failure_again = True
                                     else:
                                         # Asses success: the inner quarter of the
                                         # image should approximately show the same
@@ -5649,13 +5645,6 @@ def parsing():
 
     whatnot = parser.parse_args()
     inpars = vars(whatnot)
-
-    print('**********************')
-    print('**********************')
-    print('**********************')
-    print(inpars)
-    print('**********************')
-    print('**********************')
     inpars['genbstats_exe'] = not inpars['genbstats_suppress']
     inpars.pop('genbstats_suppress')
     inpars['gentarget_exe'] = not inpars['gentarget_suppress']
@@ -5689,9 +5678,6 @@ def runtime():
         if argument in kwargs.keys():
             sys.exit()
     Beach(**kwargs)
-    print("shitto")
-    print(kwargs)
-
 
 if __name__ == '__main__':
     #testing()
