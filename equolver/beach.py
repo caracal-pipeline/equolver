@@ -2717,12 +2717,13 @@ class Beach:
                         tolerance=tolerance,
                         nsamps=kwargs['nsamps'],
                         epsilon=kwargs['epsilon'],
-                        maxiter=maxiter
+                        #maxiter=maxiter
                     )
                     repeat = False
                 except radio_beam.utils.BeamError:
                     tolerance = tolerance*1.1
-                    maxiter = int(maxiter*1.1)
+                    print('Common Beam: increasing tolerance')
+                    #maxiter = int(maxiter*1.1)
 
             bmaj = common_beam.major.to(u.degree).value
             bmin = common_beam.minor.to(u.degree).value
