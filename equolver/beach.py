@@ -3620,6 +3620,9 @@ class Beach:
 
                     else:
 
+                        # Count valid pixels before convolution
+                        validbefore = np.isfinite(targetplane).astype(int).sum()
+                        
                         # Attempt to convolve
                         self._reconvolve(originplane, targetplane,
                                          originbeam, targetbeam,
@@ -3629,7 +3632,7 @@ class Beach:
                         failure = False
 
                         # Assess success: one nan/inf pixel marks failure
-                        if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
+                        if np.isfinite(targetplane).astype(int).sum() < validbefore:  # noqa: E501
                             failure = True
                         else:
                             # Asses success: the inner quarter of the image
@@ -3699,8 +3702,8 @@ class Beach:
                                                      threads=self._threads)
 
                                     # Check again
-                                    if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
-                                         failure_again = True
+                                    if np.isfinite(targetplane).astype(int).sum() < validbefore:  # noqa: E501
+                                        failure_again = True
                                     else:
                                         # Asses success: the inner quarter of the
                                         # image should approximately show the same
@@ -4584,6 +4587,9 @@ class Beach:
         constant in the Fourier domain).
 
         """
+        originmask = np.isnan(originplane)
+        originplane[originmask] = 0.
+        
         ikernel = self._igaussian_2dp(naxis1=targetplane.shape[1],
                                       naxis2=targetplane.shape[0],
                                       dispersion_maj_a=originbeam[0],
@@ -4620,6 +4626,8 @@ class Beach:
                                       auto_contiguous=True, avoid_copy=False,
                                       norm=None)
         targetplane[:] = ifft()
+        originplane[originmask] = np.nan
+        targetplane[originmask] = np.nan
         return
 
     def createstcubes(self, mode='gauss', gauprops=[], outcubi=[], naxis=4,
