@@ -58,8 +58,8 @@ class Beach:
                  gentarget_exe=True,
                  gentrans_exe=True, tra_residualnames=None,
                  tra_modelnames=None, tra_fitsnames=None,
-                 tra_mode='mask', tra_hdmode=True, tra_tol=0.0001,
-                 tra_overwrite=False, tra_maxker=1E7,
+                 tra_mode='mask', tra_hdmode=True, tra_tol=1.,
+                 tra_overwrite=False, tra_maxker=1E7, tra_growthresh = 0.,
                  tra_commonbeam=True, tra_indibeam=True,
                  tra_return_astropy=False,
                  threads=1, verb=False):
@@ -182,8 +182,8 @@ class Beach:
 
         for para in ['gentrans_exe', 'tra_modelnames', 'tra_residualnames',
                      'tra_fitsnames', 'tra_mode', 'tra_hdmode', 'tra_tol',
-                     'tra_maxker', 'tra_overwrite', 'tra_commonbeam',
-                     'tra_indibeam', 'tra_return_astropy']:
+                     'tra_maxker', 'tra_growthresh', 'tra_overwrite',
+                     'tra_commonbeam', 'tra_indibeam', 'tra_return_astropy']:
             self.__dict__['_'+para] = copy.deepcopy(locals()[para])
 
         if self._gentrans_exe:
@@ -262,6 +262,7 @@ class Beach:
         self._tra_hdmode = None
         self._tra_tol = None
         self._tra_maxker = None
+        self._tra_growthresh = None
         self._tra_overwrite = None
         self._tra_commonbeam = None
         self._tra_indibeam = None
@@ -1263,7 +1264,7 @@ class Beach:
 
     @tra_tol.deleter
     def tra_tol(self):
-        self._tra_tol = 2.
+        self._tra_tol = 1.
         return
 
     @property
@@ -1286,6 +1287,28 @@ class Beach:
     @tra_maxker.deleter
     def tra_maxker(self):
         self._tra_maxker = 1E7
+        return
+
+    @property
+    def tra_growthresh(self):
+        """
+        Return a copy of _tra_growthresh
+        """
+        return self._tra_growthresh
+
+    @tra_growthresh.setter
+    def tra_growthresh(self, value):
+        """
+        Set tra_growthresh
+        """
+        self._tra_growthresh = copy.deepcopy(value)
+        if self._gentrans_exe:
+            self.gentrans(verb=False)
+        return
+
+    @tra_growthresh.deleter
+    def tra_growthresh(self):
+        self._tra_growthresh = 0.
         return
 
     @property
@@ -3369,10 +3392,10 @@ class Beach:
 
         return
 
-    def _initgentransvar(self, tra_modelnames=None, tra_residualnames=None,
-                         tra_fitsnames=None,
-                         tra_mode=None, tra_hdmode=None,
-                         tra_tol=None, tra_maxker=None,
+    def _initgentransvar(self, tra_modelnames=None,
+                         tra_residualnames=None, tra_fitsnames=None,
+                         tra_mode=None, tra_hdmode=None, tra_tol=None,
+                         tra_maxker=None, tra_growthresh= None,
                          tra_commonbeam=None, tra_indibeam=None,
                          tra_overwrite=None, tra_return_astropy=None,
                          threads=None, verb=True):
@@ -3396,12 +3419,11 @@ class Beach:
         return output
 
     def gentrans(self, tra_modelnames=None, tra_residualnames=None,
-                 tra_fitsnames=None,
-                 tra_mode=None, tra_hdmode=None, tra_tol=None,
-                 tra_commonbeam=None, tra_indibeam=None,
+                 tra_fitsnames=None, tra_mode=None, tra_hdmode=None,
+                 tra_tol=None, tra_commonbeam=None, tra_indibeam=None,
                  tra_indimode=None, tra_overwrite=None,
-                 tra_return_astropy=None, tra_maxker=None, threads=None,
-                 verb=True):
+                 tra_return_astropy=None, tra_maxker=None,
+                 tra_growthresh = None, threads=None, verb=True):
         """(De-)convolve input data cubes or images to target beam shapes
 
         Input:
@@ -3439,6 +3461,9 @@ class Beach:
         tra_maxker (float):                  Maximum value that the FT of the
                                              convolution kernel can assume,
                                              will assume failure if larger
+        tra_growthresh (float):              Temporarily multiply origin
+                                             beamsize by this number to decide
+                                             if a reconvolution makes sense
         threads (bool)                     : Number of threads
 
         Serially opens all cubes (images) listed in tra_residualnames and
@@ -3455,7 +3480,13 @@ class Beach:
         than tra_tol, the (de-)convolution has failed. In addition,
         tra_maxker allows the user to manually set the maximum
         exponent in the FT of a kernel as an alternative way to decide
-        whether a reconvolution is bound to fail.
+        whether a reconvolution is bound to fail. A third means to 
+        control whether to attempt a deconvolution is to calculate
+        the Gaussian beam by which the original beam, scaled in size 
+        by tra_growthresh, should be convolved to become the target
+        beam. If no real solution exists, the attempt is not made. By
+        default tra_growthresh is 0, meaning that a "deconvolution"
+        will always succeed (equivalent to ignoring the parameter).
 
         The mode of the deconvolution is determined by parameter
         tra_mode as follows:
@@ -3487,12 +3518,14 @@ class Beach:
         stop = self._initgentransvar(tra_modelnames=tra_modelnames,
                                      tra_residualnames=tra_residualnames,
                                      tra_fitsnames=tra_fitsnames,
-                                     tra_mode=tra_mode, tra_tol=tra_tol,
+                                     tra_mode=tra_mode,
+                                     tra_tol=tra_tol,
                                      tra_overwrite=tra_overwrite,
                                      tra_commonbeam=tra_commonbeam,
                                      tra_indibeam=tra_indibeam,
                                      tra_return_astropy=tra_return_astropy,
-                                     tra_maxker=tra_maxker, verb=verb,
+                                     tra_maxker=tra_maxker,
+                                     tra_growthresh=tra_growthresh,verb=verb,
                                      threads=threads)
         if stop:
             if verb or self._verb:
@@ -3621,36 +3654,48 @@ class Beach:
                             targetbeam[1]/(originbeam[0]*originbeam[1])
 
                     else:
-
-                        # Count valid pixels before convolution
-                        validbefore = np.isfinite(targetplane).astype(int).sum()
                         
-                        # Attempt to convolve
-                        self._reconvolve(originplane, targetplane,
-                                         originbeam, targetbeam,
-                                         threads=self._threads,
-                                         maxker=self._tra_maxker)
-
                         failure = False
 
-                        # Assess success: one nan/inf pixel marks failure
-                        if np.isfinite(targetplane).astype(int).sum() < validbefore:  # noqa: E501
+                        # Check if we even attempt to reconvolve
+                        try:
+                            mytabe = radio_beam.Beam(targetbeam[0]*u.arcsec, targetbeam[1]*u.arcsec, targetbeam[2]*u.deg)
+                        except ValueError:
+                            mytabe = radio_beam.Beam(targetbeam[1]*u.arcsec, targetbeam[0]*u.arcsec, (targetbeam[2]+90)*u.deg)
+                        try:
+                            myorbe = radio_beam.Beam(self._tra_growthresh*originbeam[0]*u.arcsec, self._tra_growthresh*originbeam[1]*u.arcsec, originbeam[2]*u.deg)
+                        except ValueError:
+                            myorbe = radio_beam.Beam(self._tra_growthresh*originbeam[1]*u.arcsec, self._tra_growthresh*originbeam[0]*u.arcsec, (originbeam[2]+90)*u.deg)
+                        try:
+                            mytabe.deconvolve(myorbe)
+                        except ValueError:
                             failure = True
-                        else:
-                            # Asses success: the inner quarter of the image
-                            # should approximately show the same sum,
-                            # normalised by the beam size
-                            # originflux = originplane[originplane.shape[0]//4:3*originplane.shape[0]//4,   # noqa: E501
-                            #            originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])  # noqa: E501
-                            # targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,  # noqa: E501
-                            #            targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])  # noqa: E501
-                            originflux = originplane.sum(
-                            )/(originbeam[0]*originbeam[1])
-                            targetflux = targetplane.sum(
-                            )/(targetbeam[0]*targetbeam[1])
-                            failure = np.amax([np.fabs(originflux),
-                                               np.fabs(targetflux)])/np.amin([np.fabs(originflux),  # noqa: E501
-                                                                              np.fabs(targetflux)]) > self._tra_tol+1.  # noqa: E501
+                        
+                        # Attempt to convolve
+                        if not failure:
+                            self._reconvolve(originplane, targetplane,
+                                             originbeam, targetbeam,
+                                             threads=self._threads,
+                                             maxker=self._tra_maxker)
+
+                            # Assess success: one nan/inf pixel marks failure
+                            if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
+                                failure = True
+                            else:
+                                # Asses success: the inner quarter of the image
+                                # should approximately show the same sum,
+                                # normalised by the beam size
+                                # originflux = originplane[originplane.shape[0]//4:3*originplane.shape[0]//4,   # noqa: E501
+                                #            originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])  # noqa: E501
+                                # targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,  # noqa: E501
+                                #            targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])  # noqa: E501
+                                originflux = originplane.sum(
+                                )/(originbeam[0]*originbeam[1])
+                                targetflux = targetplane.sum(
+                                )/(targetbeam[0]*targetbeam[1])
+                                failure = np.amax([np.fabs(originflux),
+                                                   np.fabs(targetflux)])/np.amin([np.fabs(originflux),  # noqa: E501
+                                                                                  np.fabs(targetflux)]) > self._tra_tol+1.  # noqa: E501
 
                         if failure:
                             if isinstance(cuben[i], type('')):
@@ -3691,36 +3736,49 @@ class Beach:
                                                                                                      targetbeam[1]*np.sqrt(np.log(256.)),  # noqa: E501
                                                                                                      180.*originbeam[2]/np.pi))  # noqa: E501
 
-                                    # Then we can go half way, we convolve to the
-                                    # same minor beam,
-                                    # but not more
-                                    self._reconvolve(originplane,
-                                                     targetplane,
-                                                     originbeam,
-                                                     [originbeam[0],
-                                                      targetbeam[1],
-                                                      originbeam[2]],
-                                                     maxker=self._tra_maxker,
-                                                     threads=self._threads)
-
-                                    # Check again
-                                    if np.isfinite(targetplane).astype(int).sum() < validbefore:  # noqa: E501
+                                    failure_again = False
+                                    try:
+                                        mytabe = radio_beam.Beam(originbeam[0]*u.arcsec, targetbeam[1]*u.arcsec, originbeam[2]*u.deg)
+                                    except ValueError:
+                                        mytabe = radio_beam.Beam(targetbeam[1]*u.arcsec, originbeam[0]*u.arcsec, (originbeam[2]+90)*u.deg)
+                                    try:
+                                        mytabe.deconvolve(myorbe)
+                                    except ValueError:
                                         failure_again = True
-                                    else:
-                                        # Asses success: the inner quarter of the
-                                        # image should approximately show the same
-                                        # sum, normalised by the beam size
-                                        # orginflux = originplane[originplane.shape[0]//4:3* originplane.shape[0]//4,  # noqa: E501
-                                        #            originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])  # noqa: E501
-                                        # targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,  # noqa: E501
-                                        #            targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])  # noqa: E501
-                                        originflux = originplane.sum() / \
-                                            (originbeam[1])
-                                        targetflux = targetplane.sum() / \
-                                            (targetbeam[1])
-                                        failure_again = np.amax([np.fabs(originflux),  # noqa: E501
-                                                                 np.fabs(targetflux)])/np.amin([np.fabs(originflux),  # noqa: E501
-                                                                                               np.fabs(targetflux)]) > self._tra_tol+1. # noqa: E501
+                                        
+                                    # This should not be necessary
+                                    
+                                    if not failure_again:
+                                        # Then we can go half way, we convolve to the
+                                        # same minor beam,
+                                        # but not more
+                                        self._reconvolve(originplane,
+                                                         targetplane,
+                                                         originbeam,
+                                                         [originbeam[0],
+                                                          targetbeam[1],
+                                                          originbeam[2]],
+                                                         maxker=self._tra_maxker,
+                                                         threads=self._threads)
+
+                                        # Check again
+                                        if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
+                                             failure_again = True
+                                        else:
+                                            # Asses success: the inner quarter of the
+                                            # image should approximately show the same
+                                            # sum, normalised by the beam size
+                                            # orginflux = originplane[originplane.shape[0]//4:3* originplane.shape[0]//4,  # noqa: E501
+                                            #            originplane.shape[1]//4:3*originplane.shape[1]//4].sum()/(originbeam[0]*originbeam[1])  # noqa: E501
+                                            # targetflux = targetplane[targetplane.shape[0]//4:3*targetplane.shape[0]//4,  # noqa: E501
+                                            #            targetplane.shape[1]//4:3*targetplane.shape[1]//4].sum()/(targetbeam[0]*targetbeam[1])  # noqa: E501
+                                            originflux = originplane.sum() / \
+                                                (originbeam[1])
+                                            targetflux = targetplane.sum() / \
+                                                (targetbeam[1])
+                                            failure_again = np.amax([np.fabs(originflux),  # noqa: E501
+                                                                     np.fabs(targetflux)])/np.amin([np.fabs(originflux),  # noqa: E501
+                                                                                                   np.fabs(targetflux)]) > self._tra_tol+1. # noqa: E501
 
                                     if failure_again:
                                         if isinstance(cuben[i], type('')):
@@ -5478,7 +5536,7 @@ def description():
     textwrap.fill('Generate a set of transformed images from the input with the beam properties derived (gen\'tra\'ns)')+'\n' + \
     textwrap.fill(70*'=')+'\n' + \
     '\n' + \
-    textwrap.fill('The final section serially opens all cubes (images) listed in tra_residualnames (defaulting to INC_CUBES) and generates cubes (de-)convolved to the resolution as specified in the target section. The section can be omitted by setting the switch --gentrans_suppress. If executed the section optionally convolves all cubes listed in --tra_modelnames TRA_MODELNAMES with the respective Gaussians and adds those to the output. If given, the number of cubes listed as TRA_MODELNAMES and the dimensionality of the cubes must be identical to the one of the input cubes (specified through INC_CUBES). While from a mathematical viewpoint the de-convolution to smaller beams should work, this is in practice limited by numerical effects. To handle such situations, equolver provides several strategies, specified with the parameter --tra_mode TRA_MODE. A (de-)convolution is declared a success or a failure by comparing for the input and output plane the sum of the pixels of the plane divided by the beam solid angle. If the ratio of the larger sum divided by the smaller sum is larger than the parameter --tra_tol TRA_TOL (default: 2), the total power hence changes significally, the (de-)convolution is flagged a failure. In addition, --tra_maxker TRA_MAXKER allows the user to manually set the maximum in the FT of a kernel as an alternative way to decide whether a reconvolution is bound to fail.')+'\n' + \
+    textwrap.fill('The final section serially opens all cubes (images) listed in tra_residualnames (defaulting to INC_CUBES) and generates cubes (de-)convolved to the resolution as specified in the target section. The section can be omitted by setting the switch --gentrans_suppress. If executed the section optionally convolves all cubes listed in --tra_modelnames TRA_MODELNAMES with the respective Gaussians and adds those to the output. If given, the number of cubes listed as TRA_MODELNAMES and the dimensionality of the cubes must be identical to the one of the input cubes (specified through INC_CUBES). While from a mathematical viewpoint the de-convolution to smaller beams should work, this is in practice limited by numerical effects. To handle such situations, equolver provides several strategies, specified with the parameter --tra_mode TRA_MODE. A (de-)convolution is declared a success or a failure by comparing for the input and output plane the sum of the pixels of the plane divided by the beam solid angle. If the ratio of the larger sum divided by the smaller sum is larger than the parameter --tra_tol TRA_TOL (default: 1) plus 1, the total power hence changes significally, the (de-)convolution is flagged a failure. In addition, --tra_maxker TRA_MAXKER allows the user to manually set the maximum in the FT of a kernel as an alternative way to decide whether a reconvolution is bound to fail. A third means to control whether to attempt a deconvolution is to calculate the Gaussian beam by which the original beam, scaled in size by TRA_GROWTHRESH, should be convolved to become the target beam. If no real solution exists, the attempt is not made. By default TRA_GROWTHRESH is 0, meaning that a "deconvolution" will always succeed (equivalent to ignoring the parameter).')+'\n' + \
     '\n' + \
     'The mode of the deconvolution is determined with TRA_MODE as follows:'+'\n' + \
     '\n' + \
@@ -5644,6 +5702,10 @@ def parsing():
                         help='Maximum value that the FT of the convolution' +
                              'kernel can assume, will assume failure if ' +
                              'larger', type=float)
+    parser.add_argument('--tra_growthresh',
+                        help='Temporarily multiply origin beamsize by this' +
+                        'number to decide if a reconvolution makes sense',
+                        type=float)
     parser.add_argument('--tra_no_commonbeam',
                         help='Switch to suppress common (average) beam information in ' +
                              'header', default = False, action= 'store_true')
