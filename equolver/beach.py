@@ -3670,6 +3670,8 @@ class Beach:
                             mytabe.deconvolve(myorbe)
                         except ValueError:
                             failure = True
+
+                        validbefore = np.isfinite(targetplane).astype(int).sum()
                         
                         # Attempt to convolve
                         if not failure:
@@ -3679,7 +3681,9 @@ class Beach:
                                              maxker=self._tra_maxker)
 
                             # Assess success: one nan/inf pixel marks failure
-                            if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
+                            #if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
+                            if np.isfinite(targetplane).astype(int).sum() < validbefore:
+                                print('Detected extra invalid voxels')
                                 failure = True
                             else:
                                 # Asses success: the inner quarter of the image
@@ -3696,6 +3700,10 @@ class Beach:
                                 failure = np.amax([np.fabs(originflux),
                                                    np.fabs(targetflux)])/np.amin([np.fabs(originflux),  # noqa: E501
                                                                                   np.fabs(targetflux)]) > self._tra_tol+1.  # noqa: E501
+                                if failure:
+                                    print('Total fluxes of origin and target ' +
+                                          'image differ more than by a ' +
+                                          'factor 1+tra_tol')
 
                         if failure:
                             if isinstance(cuben[i], type('')):
@@ -3762,8 +3770,10 @@ class Beach:
                                                          threads=self._threads)
 
                                         # Check again
-                                        if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
-                                             failure_again = True
+                                        if np.isfinite(targetplane).astype(int).sum() < validbefore:  # noqa: E501
+                                        #if np.isfinite(targetplane).astype(int).sum() < targetplane.size:  # noqa: E501
+                                            print('Detected extra invalid voxels')
+                                            failure_again = True
                                         else:
                                             # Asses success: the inner quarter of the
                                             # image should approximately show the same
@@ -3779,6 +3789,11 @@ class Beach:
                                             failure_again = np.amax([np.fabs(originflux),  # noqa: E501
                                                                      np.fabs(targetflux)])/np.amin([np.fabs(originflux),  # noqa: E501
                                                                                                    np.fabs(targetflux)]) > self._tra_tol+1. # noqa: E501
+                                            if failure_again:
+                                                print('Total fluxes of origin and target ' +
+                                                      'image differ more than by a ' +
+                                                      'factor 1+tra_tol')
+
 
                                     if failure_again:
                                         if isinstance(cuben[i], type('')):
