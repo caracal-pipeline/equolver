@@ -36,7 +36,7 @@ setup(name=PACKAGE_NAME,
       include_package_data=True,
       # package_data - any binary or meta data files should go into MANIFEST.in
       scripts=["bin/" + j for j in os.listdir("bin")],
-      license=["BSD 3-Clause License"],
+      license="BSD 3-Clause License",
       classifiers=[
           "Development Status :: 4 - Beta",
           "Intended Audience :: Science/Research",
