@@ -9,7 +9,7 @@ except ImportError as e:
 
 requirements = [
     'numpy',
-    'scipy',
+    'scipy >= 1.5.0',
     'astropy',
     'radio_beam',
     'pyfftw',

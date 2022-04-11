@@ -17,5 +17,5 @@ pip install -r wherever/equolver/requirements.txt
 ```
 ## Starting
 Type ``equolver -h`` or ``equolver -h -v``.
-See ``equolver/equolver_demo`` for an example.
+See ``test/equolver_demo`` for an example.
 

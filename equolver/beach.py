@@ -5574,7 +5574,7 @@ def parsing():
     parser = argparse.ArgumentParser(description='Convolve fits images and data cubes to the same resolution.',  # noqa: E501
                                      formatter_class=argparse.RawTextHelpFormatter,  # noqa: E501
                                      prog='equolver',
-                                     usage='%(prog)s [options]', epilog=epilog,
+                                     usage='%(prog)s [options] --inc_cubes', epilog=epilog,
                                      fromfile_prefix_chars='@',
                                      argument_default=argparse.SUPPRESS)
 
@@ -5584,7 +5584,8 @@ def parsing():
     parser.add_argument('--verb', '-v', default=False, action='store_true',
                         help='Verbose output? If flag is set: yes')
     # gen
-    parser.add_argument('--inc_cubes', '-i',
+    required = parser.add_argument_group("Mandatory arguments")
+    required.add_argument('--inc_cubes', '-i', required=True, nargs="+",
                         help='Input cubes: names or list of names, python ' +
                              'style', type=str)
     # genbinput
@@ -5748,6 +5749,7 @@ def parsing():
     inpars.pop('tra_no_commonbeam')
     inpars['tra_indibeam'] = not inpars['tra_no_indibeam']
     inpars.pop('tra_no_indibeam')
+
     for key in list(inpars.keys()):
         try:
             result = eval(inpars[key])
