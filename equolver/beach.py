@@ -5749,10 +5749,9 @@ def parsing():
     inpars.pop('tra_no_commonbeam')
     inpars['tra_indibeam'] = not inpars['tra_no_indibeam']
     inpars.pop('tra_no_indibeam')
-
     for key in list(inpars.keys()):
         try:
-            result = eval(inpars[key])
+            result = eval(inpars[key]) if inpars[key] !="all" else "all"
         except Exception:
             result = inpars[key]
         inpars[key] = result
